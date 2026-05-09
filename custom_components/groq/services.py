@@ -24,7 +24,6 @@ from .api import (
     VisionRequest,
 )
 from .const import (
-    CONF_API_KEY,
     CONF_INCLUDE_REASONING,
     CONF_MAX_TOKENS,
     CONF_NAME,
@@ -259,12 +258,6 @@ def _service_value(
     return service_data.get(key, default)
 
 
-def _service_api_key(service_data: dict[str, Any]) -> str | None:
-    """Return an optional service-specific API key."""
-    value = service_data.get(CONF_API_KEY)
-    return str(value) if value else None
-
-
 def _ensure_feature(runtime: GroqRuntimeData, feature: GroqFeature) -> None:
     """Raise if a feature is disabled."""
     runtime.feature_registry.ensure_enabled(feature)
@@ -410,7 +403,6 @@ def _handle_generate_text(hass: HomeAssistant):
                     DEFAULT_SYSTEM_PROMPT,
                 ),
                 **_request_options(call.data, service_data),
-                api_key=_service_api_key(service_data),
                 schema=schema,
                 schema_name=_service_value(
                     call,
@@ -431,7 +423,6 @@ def _handle_generate_text(hass: HomeAssistant):
                     DEFAULT_SYSTEM_PROMPT,
                 ),
                 **_request_options(call.data, service_data),
-                api_key=_service_api_key(service_data),
             )
         key = _cache_key(
             "text_generation",
@@ -484,7 +475,6 @@ def _handle_generate_structured(hass: HomeAssistant):
             model=model,
             system_prompt=_service_value(call, service_data, ATTR_SYSTEM_PROMPT),
             **_request_options(call.data, service_data),
-            api_key=_service_api_key(service_data),
             schema=call.data[ATTR_SCHEMA],
             schema_name=_service_value(
                 call,
@@ -533,7 +523,6 @@ def _handle_analyze_image(hass: HomeAssistant):
             model=model,
             system_prompt=_service_value(call, service_data, ATTR_SYSTEM_PROMPT),
             image_url=call.data[ATTR_IMAGE_URL],
-            api_key=_service_api_key(service_data),
         )
         key = _cache_key(
             "vision",
@@ -577,7 +566,6 @@ def _handle_extract_text_from_image(hass: HomeAssistant):
             model=model,
             system_prompt=_service_value(call, service_data, ATTR_SYSTEM_PROMPT),
             image_url=call.data[ATTR_IMAGE_URL],
-            api_key=_service_api_key(service_data),
         )
         key = _cache_key(
             "ocr",

@@ -19,6 +19,7 @@ from homeassistant.config_entries import (
 )
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.core import callback
+from homeassistant.helpers.selector import selector
 
 from .const import (
     CONF_ADVANCED_OPTIONS,
@@ -26,7 +27,11 @@ from .const import (
     CONF_ENABLED_FEATURES,
     CONF_MODEL,
     CONF_NAME,
+    CONF_PROTECT_FREE_TIER,
     CONF_SERVICE_TYPE,
+    CONF_VOICE,
+    DEFAULT_MODEL,
+    DEFAULT_PROTECT_FREE_TIER,
     DOMAIN,
     FEATURE_IMAGE_RECOGNITION,
     FEATURE_LABELS,
@@ -35,9 +40,15 @@ from .const import (
     FEATURE_TEXT_TO_SPEECH,
     MODELS,
     SETUP_FEATURES,
+    STT_MODELS,
+    TEXT_MODELS,
     UNIQUE_ID,
+    VISION_MODELS,
     VOICES,
+    stt_language_default,
+    voice_options_for_model,
 )
+from .feature_registry import GroqFeature
 from .flow_schemas import (
     api_key_selector,
     clean_service_input,
@@ -52,6 +63,7 @@ from .flow_schemas import (
     validate_text_generation_input,
     validate_user_input,
 )
+from .model_registry import GroqModel, GroqModelRegistry, model_from_api
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -89,31 +101,64 @@ async def fetch_available(hass, endpoint: str, api_key: str | None = None) -> li
     return []
 
 
-async def async_validate_api_key(hass, api_key: str) -> str | None:
-    """Validate a Groq API key against a lightweight authenticated endpoint."""
+async def async_fetch_available_models(hass, api_key: str) -> list[GroqModel]:
+    """Fetch active models visible to a Groq API key."""
     session = async_get_clientsession(hass)
     headers = {"Authorization": f"Bearer {api_key}"}
+    async with session.get(
+        MODELS_ENDPOINT,
+        headers=headers,
+        timeout=API_KEY_VALIDATION_TIMEOUT,
+    ) as resp:
+        if resp.status in (401, 403):
+            raise ValueError("invalid_auth")
+        if resp.status != 200:
+            raise RuntimeError(f"Unexpected Groq models status {resp.status}")
+        data = await resp.json()
+    items = data.get("data") if isinstance(data, dict) else None
+    if not isinstance(items, list):
+        raise RuntimeError("Groq models response did not include a data list")
+    return [model_from_api(item) for item in items if isinstance(item, dict)]
+
+
+async def async_get_model_registry(
+    hass,
+    api_key: str | None,
+) -> GroqModelRegistry:
+    """Return a model registry discovered from Groq, with built-ins as fallback."""
+    if not api_key:
+        return GroqModelRegistry()
     try:
-        async with session.get(
-            MODELS_ENDPOINT,
-            headers=headers,
-            timeout=API_KEY_VALIDATION_TIMEOUT,
-        ) as resp:
-            if resp.status in (401, 403):
-                return "invalid_auth"
-            if resp.status != 200:
-                _LOGGER.debug(
-                    "Groq API key validation failed with status %s", resp.status
-                )
-                return "unknown"
-            try:
-                data = await resp.json()
-            except (aiohttp.ContentTypeError, ValueError) as err:
-                _LOGGER.debug("Groq API key validation returned invalid JSON: %s", err)
-                return "unknown"
-            if not isinstance(data, dict) or not isinstance(data.get("data"), list):
-                _LOGGER.debug("Groq API key validation returned unexpected payload")
-                return "unknown"
+        models = await async_fetch_available_models(hass, api_key)
+    except ValueError:
+        raise
+    except Exception as err:  # pylint: disable=broad-except
+        _LOGGER.debug("Could not fetch Groq model list: %s", err)
+        return GroqModelRegistry()
+    if not models:
+        return GroqModelRegistry()
+    return GroqModelRegistry(models, include_built_ins=False)
+
+
+def _model_ids_for_feature(
+    registry: GroqModelRegistry,
+    feature: GroqFeature,
+    fallback: list[str],
+) -> list[str]:
+    """Return model ids for a feature, falling back only when discovery is empty."""
+    model_ids = [model.model_id for model in registry.models_for_feature(feature)]
+    return model_ids or fallback
+
+
+async def async_validate_api_key(hass, api_key: str) -> str | None:
+    """Validate a Groq API key against a lightweight authenticated endpoint."""
+    try:
+        await async_fetch_available_models(hass, api_key)
+    except ValueError:
+        return "invalid_auth"
+    except (aiohttp.ContentTypeError, TypeError) as err:
+        _LOGGER.debug("Groq API key validation returned invalid payload: %s", err)
+        return "unknown"
     except (aiohttp.ClientError, TimeoutError) as err:
         _LOGGER.debug("Could not connect to Groq while validating API key: %s", err)
         return "cannot_connect"
@@ -138,9 +183,9 @@ def get_model_options(discovered_models: list[str]) -> list[str]:
 
 async def get_dynamic_options(hass, api_key: str | None) -> tuple[list[str], list[str]]:
     """Return a dynamic list of models and the built-in voices."""
-    models = get_model_options(await fetch_available(hass, MODELS_ENDPOINT, api_key))
-    voices = VOICES
-    return models, voices
+    registry = await async_get_model_registry(hass, api_key)
+    models = _model_ids_for_feature(registry, GroqFeature.TEXT_TO_SPEECH, MODELS)
+    return models, VOICES
 
 
 class GroqConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -261,11 +306,28 @@ class GroqOptionsFlow(OptionsFlow):
             if not user_input.get(CONF_API_KEY):
                 user_input.pop(CONF_API_KEY, None)
             return self.async_create_entry(title="", data=user_input)
+        try:
+            current_entry = self.config_entry
+        except ValueError:
+            current_options = {}
+            current_data = {}
+        else:
+            current_options = dict(current_entry.options)
+            current_data = dict(current_entry.data)
         options_schema = vol.Schema(
             {
                 vol.Optional(
                     CONF_API_KEY,
                 ): api_key_selector(),
+                vol.Optional(
+                    CONF_PROTECT_FREE_TIER,
+                    default=current_options.get(
+                        CONF_PROTECT_FREE_TIER,
+                        current_data.get(
+                            CONF_PROTECT_FREE_TIER, DEFAULT_PROTECT_FREE_TIER
+                        ),
+                    ),
+                ): selector({"boolean": {}}),
             }
         )
         return self.async_show_form(step_id="init", data_schema=options_schema)
@@ -278,6 +340,7 @@ class GroqServiceSubentryFlow(ConfigSubentryFlow):
         """Initialize the service subentry flow."""
         self._service_type: str | None = None
         self._pending_service_data: dict[str, Any] = {}
+        self._tts_model_context: str | None = None
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         """Add a Groq service subentry."""
@@ -332,6 +395,37 @@ class GroqServiceSubentryFlow(ConfigSubentryFlow):
             return self._configured_service_type
         raise ValueError("Unsupported Groq service subentry type")
 
+    def _account_api_key(self) -> str | None:
+        """Return the account API key for model discovery."""
+        try:
+            entry = self._get_entry()
+        except (AttributeError, TypeError):
+            return None
+        data = getattr(entry, "data", {}) or {}
+        options = getattr(entry, "options", {}) or {}
+        return data.get(CONF_API_KEY) or options.get(CONF_API_KEY)
+
+    async def _model_registry(
+        self,
+        service_data: dict[str, Any] | None = None,
+    ) -> GroqModelRegistry:
+        """Return discovered model metadata for the active account key."""
+        api_key = self._account_api_key()
+        try:
+            return await async_get_model_registry(self.hass, api_key)
+        except ValueError:
+            return GroqModelRegistry()
+
+    async def _model_options(
+        self,
+        feature: GroqFeature,
+        fallback: list[str],
+        service_data: dict[str, Any] | None = None,
+    ) -> tuple[list[str], GroqModelRegistry]:
+        """Return valid model ids and the registry used to derive them."""
+        registry = await self._model_registry(service_data)
+        return _model_ids_for_feature(registry, feature, fallback), registry
+
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         """Show the initial service type selector."""
         if user_input is not None and CONF_SERVICE_TYPE in user_input:
@@ -347,14 +441,22 @@ class GroqServiceSubentryFlow(ConfigSubentryFlow):
         self, user_input: dict[str, Any] | None = None
     ):
         """Configure a text generation service."""
+        model_options, model_registry = await self._model_options(
+            GroqFeature.TEXT_GENERATION,
+            TEXT_MODELS,
+            user_input,
+        )
         if user_input is not None:
             configure_advanced = bool(user_input.pop(CONF_ADVANCED_OPTIONS, False))
             user_input = clean_service_input(user_input)
-            errors = validate_text_generation_input(user_input)
+            errors = validate_text_generation_input(user_input, model_registry)
             if errors:
                 return self.async_show_form(
                     step_id=FEATURE_TEXT_GENERATION,
-                    data_schema=text_generation_basic_schema(user_input),
+                    data_schema=text_generation_basic_schema(
+                        user_input,
+                        model_options,
+                    ),
                     errors=errors,
                 )
             if configure_advanced:
@@ -368,7 +470,8 @@ class GroqServiceSubentryFlow(ConfigSubentryFlow):
                 return self.async_show_form(
                     step_id="text_generation_advanced",
                     data_schema=text_generation_advanced_schema(
-                        self._pending_service_data
+                        self._pending_service_data,
+                        model_registry,
                     ),
                 )
             if self._is_reconfigure:
@@ -380,7 +483,10 @@ class GroqServiceSubentryFlow(ConfigSubentryFlow):
 
         return self.async_show_form(
             step_id=FEATURE_TEXT_GENERATION,
-            data_schema=text_generation_basic_schema(self._existing_service_data()),
+            data_schema=text_generation_basic_schema(
+                self._existing_service_data(),
+                model_options,
+            ),
         )
 
     async def async_step_text_generation_advanced(
@@ -393,7 +499,8 @@ class GroqServiceSubentryFlow(ConfigSubentryFlow):
                 **user_input,
             }
             service_data = clean_service_input(service_data)
-            errors = validate_text_generation_input(service_data)
+            model_registry = await self._model_registry(service_data)
+            errors = validate_text_generation_input(service_data, model_registry)
             if errors:
                 advanced_errors = {
                     "base" if field == CONF_MODEL else field: reason
@@ -401,50 +508,120 @@ class GroqServiceSubentryFlow(ConfigSubentryFlow):
                 }
                 return self.async_show_form(
                     step_id="text_generation_advanced",
-                    data_schema=text_generation_advanced_schema(service_data),
+                    data_schema=text_generation_advanced_schema(
+                        service_data,
+                        model_registry,
+                    ),
                     errors=advanced_errors,
                 )
             self._pending_service_data = {}
             return self._create_service_entry(FEATURE_TEXT_GENERATION, service_data)
 
+        model_registry = await self._model_registry(self._pending_service_data)
         return self.async_show_form(
             step_id="text_generation_advanced",
-            data_schema=text_generation_advanced_schema(self._pending_service_data),
+            data_schema=text_generation_advanced_schema(
+                self._pending_service_data,
+                model_registry,
+            ),
         )
 
     async def async_step_speech_to_text(self, user_input: dict[str, Any] | None = None):
         """Configure a speech-to-text service."""
+        model_options, _model_registry = await self._model_options(
+            GroqFeature.SPEECH_TO_TEXT,
+            STT_MODELS,
+            user_input,
+        )
         if user_input is not None:
             user_input = clean_service_input(user_input)
             return self._create_service_entry(FEATURE_SPEECH_TO_TEXT, user_input)
 
+        hass_language = getattr(getattr(self.hass, "config", None), "language", None)
         return self.async_show_form(
             step_id=FEATURE_SPEECH_TO_TEXT,
-            data_schema=speech_to_text_schema(self._existing_service_data()),
+            data_schema=speech_to_text_schema(
+                self._existing_service_data(),
+                model_options,
+                stt_language_default(hass_language),
+            ),
         )
 
     async def async_step_text_to_speech(self, user_input: dict[str, Any] | None = None):
         """Configure a text-to-speech service."""
+        model_options, _model_registry = await self._model_options(
+            GroqFeature.TEXT_TO_SPEECH,
+            MODELS,
+            user_input,
+        )
+        existing_data = self._existing_service_data()
+        baseline_model = (
+            self._tts_model_context or existing_data.get(CONF_MODEL) or DEFAULT_MODEL
+        )
+        schema_data = user_input or existing_data
+        selected_model = schema_data.get(CONF_MODEL) or baseline_model
+        voice_options = voice_options_for_model(selected_model)
         if user_input is not None:
             user_input = clean_service_input(user_input)
+            selected_model = user_input.get(CONF_MODEL) or baseline_model
+            voice_options = voice_options_for_model(selected_model)
+            if selected_model != baseline_model and user_input.get(CONF_VOICE):
+                self._tts_model_context = selected_model
+                user_input.pop(CONF_VOICE, None)
+                return self.async_show_form(
+                    step_id=FEATURE_TEXT_TO_SPEECH,
+                    data_schema=text_to_speech_schema(
+                        user_input,
+                        model_options,
+                        voice_options,
+                        clear_voice=True,
+                    ),
+                    errors={CONF_VOICE: "select_voice_for_model"},
+                )
+            if user_input.get(CONF_VOICE) not in voice_options:
+                self._tts_model_context = selected_model
+                user_input.pop(CONF_VOICE, None)
+                return self.async_show_form(
+                    step_id=FEATURE_TEXT_TO_SPEECH,
+                    data_schema=text_to_speech_schema(
+                        user_input,
+                        model_options,
+                        voice_options,
+                        clear_voice=True,
+                    ),
+                    errors={CONF_VOICE: "invalid_voice"},
+                )
+            self._tts_model_context = None
             return self._create_service_entry(FEATURE_TEXT_TO_SPEECH, user_input)
 
         return self.async_show_form(
             step_id=FEATURE_TEXT_TO_SPEECH,
-            data_schema=text_to_speech_schema(self._existing_service_data()),
+            data_schema=text_to_speech_schema(
+                existing_data,
+                model_options,
+                voice_options,
+            ),
         )
 
     async def async_step_image_recognition(
         self, user_input: dict[str, Any] | None = None
     ):
         """Configure an image recognition service."""
+        model_options, _model_registry = await self._model_options(
+            GroqFeature.VISION,
+            VISION_MODELS,
+            user_input,
+        )
         if user_input is not None:
             user_input = clean_service_input(user_input)
             return self._create_service_entry(FEATURE_IMAGE_RECOGNITION, user_input)
 
         return self.async_show_form(
             step_id=FEATURE_IMAGE_RECOGNITION,
-            data_schema=image_recognition_schema(self._existing_service_data()),
+            data_schema=image_recognition_schema(
+                self._existing_service_data(),
+                model_options,
+            ),
         )
 
     @staticmethod
@@ -452,11 +629,8 @@ class GroqServiceSubentryFlow(ConfigSubentryFlow):
         existing_data: dict[str, Any],
         new_data: dict[str, Any],
     ) -> dict[str, Any]:
-        """Return replacement subentry data while preserving hidden secrets."""
-        data = dict(new_data)
-        if not new_data.get(CONF_API_KEY) and existing_data.get(CONF_API_KEY):
-            data[CONF_API_KEY] = existing_data[CONF_API_KEY]
-        return data
+        """Return replacement subentry data."""
+        return dict(new_data)
 
     def _create_service_entry(self, service_type: str, user_input: dict[str, Any]):
         """Create a service subentry."""

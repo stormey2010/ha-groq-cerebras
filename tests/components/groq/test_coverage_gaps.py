@@ -45,12 +45,16 @@ from custom_components.groq.const import (
     CONF_MODEL,
     CONF_NAME,
     CONF_SERVICE_TYPE,
+    CONF_VOICE,
+    DEFAULT_STT_LANGUAGE,
     FEATURE_IMAGE_RECOGNITION,
     FEATURE_TEXT_GENERATION,
     FEATURE_TEXT_TO_SPEECH,
     UNIQUE_ID,
     enabled_features_from_entry,
     normalize_enabled_features,
+    stt_language_default,
+    voice_options_for_model,
 )
 from custom_components.groq.errors import GroqApiError, GroqRateLimitExceeded
 from custom_components.groq.feature_registry import (
@@ -59,6 +63,7 @@ from custom_components.groq.feature_registry import (
     coerce_feature,
 )
 from custom_components.groq.flow_schemas import (
+    _model_default,
     clean_service_input,
     image_recognition_schema,
     service_type_schema,
@@ -104,7 +109,6 @@ from custom_components.groq.services import (
     _handle_list_models,
     _request_options,
     _runtime_from_call,
-    _service_api_key,
     _service_from_call,
     _service_subentries,
     async_register_services,
@@ -437,7 +441,7 @@ async def test_api_client_covers_json_stream_and_error_paths():
     chunks = [
         chunk
         async for chunk in stream_client.async_stream_text(
-            TextGenerationRequest(prompt="p", model="m", api_key="service-key")
+            TextGenerationRequest(prompt="p", model="m", api_key="request-key")
         )
     ]
     assert chunks == ["Hi"]
@@ -597,15 +601,97 @@ def test_const_errors_features_cache_and_rate_limit_helpers():
         GroqRateLimiter.raise_for_headers({"retry-after": "1"}, {"error": "rate"})
 
 
+@pytest.mark.asyncio
+async def test_config_flow_dynamic_model_and_locale_fallback_branches(monkeypatch):
+    async def empty_models(_hass, _api_key):
+        return []
+
+    monkeypatch.setattr(config_flow, "async_fetch_available_models", empty_models)
+    assert (
+        await config_flow.async_get_model_registry(DummyHass(), "key")
+    ).models_for_feature(GroqFeature.TEXT_GENERATION)
+
+    async def broken_models(_hass, _api_key):
+        raise RuntimeError("models unavailable")
+
+    monkeypatch.setattr(config_flow, "async_fetch_available_models", broken_models)
+    assert (
+        await config_flow.async_get_model_registry(DummyHass(), "key")
+    ).models_for_feature(GroqFeature.TEXT_GENERATION)
+
+    async def value_error_models(_hass, _api_key):
+        raise ValueError("invalid_auth")
+
+    monkeypatch.setattr(config_flow, "async_fetch_available_models", value_error_models)
+    with pytest.raises(ValueError):
+        await config_flow.async_get_model_registry(DummyHass(), "key")
+
+    async def type_error_models(_hass, _api_key):
+        raise TypeError("bad payload")
+
+    monkeypatch.setattr(config_flow, "async_fetch_available_models", type_error_models)
+    assert await config_flow.async_validate_api_key(DummyHass(), "key") == "unknown"
+
+    assert voice_options_for_model(None)
+    assert "aisha" in voice_options_for_model("custom-arabic-orpheus")
+    assert "troy" in voice_options_for_model("custom-orpheus")
+    assert voice_options_for_model("custom-model")
+    assert stt_language_default(None) == DEFAULT_STT_LANGUAGE
+    assert stt_language_default("en_AU") == "en"
+    assert stt_language_default("es-MX") == "es-ES"
+    assert stt_language_default("xx-YY") == DEFAULT_STT_LANGUAGE
+
+    flow = config_flow.GroqServiceSubentryFlow()
+    flow.hass = DummyHass()
+    monkeypatch.setattr(
+        flow,
+        "async_show_form",
+        lambda **kwargs: {"type": "form", **kwargs},
+    )
+    monkeypatch.setattr(
+        config_flow,
+        "async_get_model_registry",
+        lambda hass, api_key: asyncio.sleep(0, result=GroqModelRegistry()),
+    )
+    result = await flow.async_step_text_to_speech(
+        {
+            CONF_NAME: "TTS",
+            CONF_MODEL: "canopylabs/orpheus-v1-english",
+            CONF_VOICE: "aisha",
+        }
+    )
+    assert result["type"] == "form"
+    assert result["errors"] == {CONF_VOICE: "invalid_voice"}
+
+    async def raise_value_registry(_hass, _api_key):
+        raise ValueError("invalid_auth")
+
+    monkeypatch.setattr(config_flow, "async_get_model_registry", raise_value_registry)
+    registry = await flow._model_registry()
+    assert registry.models_for_feature(GroqFeature.TEXT_GENERATION)
+
+
 def test_flow_schema_and_text_generation_helpers_cover_branches():
+    assert _model_default({}, CONF_MODEL, "fallback", []) == "fallback"
+    assert _model_default({}, CONF_MODEL, "fallback", ["first"]) == "first"
     assert service_type_schema()({"service_type": FEATURE_TEXT_GENERATION})
-    assert speech_to_text_schema()({"name": "STT", "model": "whisper-large-v3"})
+    assert (
+        speech_to_text_schema()({"name": "STT", "model": "whisper-large-v3"})[
+            "language"
+        ]
+        == "en-US"
+    )
+    assert (
+        speech_to_text_schema(default_language="fr-FR")(
+            {"name": "STT", "model": "whisper-large-v3"}
+        )["language"]
+        == "fr-FR"
+    )
     assert text_to_speech_schema()(
         {
             "name": "TTS",
             "model": "canopylabs/orpheus-v1-english",
             "voice": "troy",
-            "response_format": "wav",
         }
     )
     assert image_recognition_schema()(
@@ -639,7 +725,6 @@ def test_flow_schema_and_text_generation_helpers_cover_branches():
     entry = DummyEntry()
     entry.unique_id = None
     service_data = {
-        "api_key": "",
         "stop": "A\nB",
         "include_reasoning": True,
         "request_body_options": {"user": "ha"},
@@ -661,11 +746,6 @@ def test_flow_schema_and_text_generation_helpers_cover_branches():
     assert text_generation_module.text_generation_service_data(entry) == []
     assert text_generation_module.service_name(entry, {}) == "Groq"
     assert text_generation_module.service_model(entry, {}) == "llama-3.1-8b-instant"
-    assert text_generation_module.service_api_key(entry, service_data) is None
-    assert (
-        text_generation_module.service_api_key(entry, {"api_key": "service-key"})
-        == "service-key"
-    )
     assert text_generation_module.service_system_prompt(entry, {"system_prompt": ""})
     assert text_generation_module.service_temperature(entry, service_data) is None
     assert text_generation_module.service_max_tokens(entry, service_data) is None
@@ -781,6 +861,8 @@ def test_model_registry_branches():
     assert registry.get("custom-model") is model
     assert registry.all_models()[0].model_id
     assert registry.models_for_feature(GroqFeature.TEXT_GENERATION)
+    discovered_only = GroqModelRegistry([model], include_built_ins=False)
+    assert discovered_only.models_for_feature(GroqFeature.TEXT_GENERATION) == []
     with patch.dict(
         model_registry_module.FEATURE_CAPABILITIES,
         {GroqFeature.TEXT_GENERATION: frozenset()},
@@ -1037,7 +1119,7 @@ async def test_config_flow_remaining_paths(monkeypatch):
             return True
 
         def _existing_service_data(self):
-            return {CONF_API_KEY: "kept"}
+            return {CONF_NAME: "Existing"}
 
         def _create_service_entry(self, service_type, user_input):
             return {"service_type": service_type, "data": user_input}
@@ -1046,7 +1128,7 @@ async def test_config_flow_remaining_paths(monkeypatch):
     merged = await reconfigure_text_flow.async_step_text_generation(
         {CONF_NAME: "Text", CONF_MODEL: "llama-3.1-8b-instant"}
     )
-    assert merged["data"][CONF_API_KEY] == "kept"
+    assert merged["data"][CONF_NAME] == "Text"
 
     form_flow = config_flow.GroqServiceSubentryFlow()
     monkeypatch.setattr(
@@ -1103,9 +1185,15 @@ async def test_config_flow_remaining_paths(monkeypatch):
     assert (await form_flow.async_step_speech_to_text({CONF_NAME: "STT"}))[
         "service_type"
     ] == "speech_to_text"
-    assert (await form_flow.async_step_text_to_speech({CONF_NAME: "TTS"}))[
-        "service_type"
-    ] == FEATURE_TEXT_TO_SPEECH
+    assert (
+        await form_flow.async_step_text_to_speech(
+            {
+                CONF_NAME: "TTS",
+                CONF_MODEL: "canopylabs/orpheus-v1-english",
+                "voice": "troy",
+            }
+        )
+    )["service_type"] == FEATURE_TEXT_TO_SPEECH
     assert (await form_flow.async_step_image_recognition())[
         "step_id"
     ] == FEATURE_IMAGE_RECOGNITION
@@ -1189,7 +1277,6 @@ async def test_services_handlers_and_registration_cover_remaining_paths():
             service_call({ATTR_SERVICE_ID: "missing"}),
             "text_generation",
         )
-    assert _service_api_key({"api_key": "key"}) == "key"
     assert _request_options({"include_reasoning": True})["include_reasoning"] is True
 
     key = _cache_key("ns", {"b": 2, "a": 1})
@@ -1346,8 +1433,15 @@ async def test_stt_setup_properties_wav_error_and_empty_results():
     runtime.client = DummyClient()
     entry.runtime_data = runtime
     added = []
-    await stt_setup(DummyHass(), entry, lambda entities: added.extend(entities))
+    subentry_ids = []
+
+    def add_entities(entities, **kwargs):
+        added.extend(entities)
+        subentry_ids.append(kwargs.get("config_subentry_id"))
+
+    await stt_setup(DummyHass(), entry, add_entities)
     assert len(added) == 1
+    assert subentry_ids == ["stt-id"]
     entity = added[0]
     assert "en-US" in entity.supported_languages
     assert stt.AudioFormats.WAV in entity.supported_formats
@@ -1500,20 +1594,34 @@ async def test_ai_task_and_conversation_setup_properties():
     entry.runtime_data = runtime
 
     ai_entities = []
+    ai_subentry_ids = []
+
+    def add_ai_entities(entities, **kwargs):
+        ai_entities.extend(entities)
+        ai_subentry_ids.append(kwargs.get("config_subentry_id"))
+
     await ai_task_module.async_setup_entry(
         DummyHass(),
         entry,
-        lambda entities: ai_entities.extend(entities),
+        add_ai_entities,
     )
     assert len(ai_entities) == 1
+    assert ai_subentry_ids == ["text-id"]
 
     conversation_entities = []
+    conversation_subentry_ids = []
+
+    def add_conversation_entities(entities, **kwargs):
+        conversation_entities.extend(entities)
+        conversation_subentry_ids.append(kwargs.get("config_subentry_id"))
+
     await conversation_module.async_setup_entry(
         DummyHass(),
         entry,
-        lambda entities: conversation_entities.extend(entities),
+        add_conversation_entities,
     )
     assert len(conversation_entities) == 1
+    assert conversation_subentry_ids == ["text-id"]
     entity = conversation_entities[0]
     assert entity.supported_languages == "*"
     assert entity.device_info["name"] == "Assistant"

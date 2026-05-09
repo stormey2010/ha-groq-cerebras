@@ -11,13 +11,13 @@ from asyncio import CancelledError
 from homeassistant.components.tts import TextToSpeechEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from .const import (
     CONF_API_KEY,
     CONF_SERVICE_TYPE,
+    CONF_SUBENTRY_ID,
     CONF_INPUT,
     CONF_MODEL,
-    CONF_RESPONSE_FORMAT,
     CONF_VOICE,
     CONF_VOCAL_DIRECTIONS,
     CONF_URL,
@@ -53,7 +53,9 @@ def _tts_service_data(config_entry: ConfigEntry) -> list[dict | None]:
     for subentry in subentries.values():
         data = dict(getattr(subentry, "data", {}))
         if data.get(CONF_SERVICE_TYPE) == FEATURE_TEXT_TO_SPEECH:
-            data[UNIQUE_ID] = getattr(subentry, "subentry_id", data.get(UNIQUE_ID))
+            subentry_id = getattr(subentry, "subentry_id", data.get(UNIQUE_ID))
+            data[CONF_SUBENTRY_ID] = subentry_id
+            data[UNIQUE_ID] = subentry_id
             services.append(data)
     if services:
         return services
@@ -65,18 +67,13 @@ def _tts_service_data(config_entry: ConfigEntry) -> list[dict | None]:
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     api_key = config_entry.data.get(CONF_API_KEY)
     entities = []
     for service_data in _tts_service_data(config_entry):
         engine = GroqTTSEngine(
-            _entry_value(
-                config_entry,
-                CONF_API_KEY,
-                api_key,
-                service_data=service_data,
-            ),
+            _entry_value(config_entry, CONF_API_KEY, api_key),
             _entry_value(config_entry, CONF_VOICE, service_data=service_data),
             _entry_value(config_entry, CONF_MODEL, service_data=service_data),
             _entry_value(
@@ -95,16 +92,17 @@ async def async_setup_entry(
                 config_entry,
                 CONF_PROTECT_FREE_TIER,
                 DEFAULT_PROTECT_FREE_TIER,
-                service_data=service_data,
             ),
-            response_format=_entry_value(
-                config_entry,
-                CONF_RESPONSE_FORMAT,
-                DEFAULT_RESPONSE_FORMAT,
-                service_data=service_data,
-            ),
+            response_format=DEFAULT_RESPONSE_FORMAT,
         )
-        entities.append(GroqTTSEntity(hass, config_entry, engine, service_data))
+        entity = GroqTTSEntity(hass, config_entry, engine, service_data)
+        if service_data:
+            async_add_entities(
+                [entity],
+                config_subentry_id=service_data.get(CONF_SUBENTRY_ID),
+            )
+        else:
+            entities.append(entity)
     if entities:
         async_add_entities(entities)
 
@@ -148,7 +146,6 @@ class GroqTTSEntity(TextToSpeechEntity):
             CONF_INPUT,
             CONF_MODEL,
             CONF_NORMALIZE_AUDIO,
-            CONF_RESPONSE_FORMAT,
             CONF_VOICE,
             CONF_VOCAL_DIRECTIONS,
         ]
@@ -160,12 +157,6 @@ class GroqTTSEntity(TextToSpeechEntity):
             CONF_NORMALIZE_AUDIO: False,
             CONF_MODEL: _entry_value(
                 self._config, CONF_MODEL, service_data=self._service_data
-            ),
-            CONF_RESPONSE_FORMAT: _entry_value(
-                self._config,
-                CONF_RESPONSE_FORMAT,
-                DEFAULT_RESPONSE_FORMAT,
-                service_data=self._service_data,
             ),
             CONF_VOICE: _entry_value(
                 self._config, CONF_VOICE, service_data=self._service_data
@@ -245,15 +236,7 @@ class GroqTTSEntity(TextToSpeechEntity):
                 CONF_VOICE,
                 _entry_value(self._config, CONF_VOICE, service_data=self._service_data),
             )
-            effective_response_format = options.get(
-                CONF_RESPONSE_FORMAT,
-                _entry_value(
-                    self._config,
-                    CONF_RESPONSE_FORMAT,
-                    DEFAULT_RESPONSE_FORMAT,
-                    service_data=self._service_data,
-                ),
-            )
+            effective_response_format = DEFAULT_RESPONSE_FORMAT
 
             _LOGGER.debug("Creating TTS API request")
             api_start = time.monotonic()

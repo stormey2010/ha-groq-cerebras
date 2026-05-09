@@ -354,8 +354,8 @@ payload and should not be sent.
 
 ## Implementation Checklist
 
-- Keep `model`, `input`, `voice`, and `response_format` configurable.
-- Keep `response_format` restricted to `wav` while the integration is Orpheus-only.
+- Keep `model`, `input`, and `voice` configurable.
+- Keep Orpheus requests fixed to `response_format: wav`; Groq does not expose other Orpheus response formats.
 - Consider adding `sample_rate` and `speed` only if Groq confirms Orpheus support.
 - Keep vocal directions English-model-only in docs and UI help text.
 - Use `GET /models` for discovery but preserve built-in Orpheus fallback values.

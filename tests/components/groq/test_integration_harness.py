@@ -24,6 +24,8 @@ from custom_components.groq.tts import GroqTTSEntity
 
 ORPHEUS_ENGLISH_MODEL = "canopylabs/orpheus-v1-english"
 ORPHEUS_ENGLISH_VOICE = "troy"
+ORPHEUS_ARABIC_MODEL = "canopylabs/orpheus-arabic-saudi"
+ORPHEUS_ARABIC_VOICE = "aisha"
 
 
 class DummyHass:
@@ -229,10 +231,17 @@ async def test_async_validate_api_key_maps_connection_errors():
 
 @pytest.mark.asyncio
 async def test_get_dynamic_options_filters_discovered_models(monkeypatch):
-    async def fake_fetch_available(hass, endpoint, api_key=None):
-        return ["llama-3.3-70b-versatile", "canopylabs/orpheus-custom"]
+    async def fake_fetch_available_models(hass, api_key):
+        return [
+            config_flow.model_from_api({"id": "llama-3.3-70b-versatile"}),
+            config_flow.model_from_api({"id": "canopylabs/orpheus-custom"}),
+        ]
 
-    monkeypatch.setattr(config_flow, "fetch_available", fake_fetch_available)
+    monkeypatch.setattr(
+        config_flow,
+        "async_fetch_available_models",
+        fake_fetch_available_models,
+    )
 
     models, voices = await config_flow.get_dynamic_options(DummyHass(), "api-key")
 
@@ -302,13 +311,11 @@ def test_tts_entity_properties_use_options_over_data():
         "input",
         "model",
         "normalize_audio",
-        "response_format",
         "voice",
         "vocal_directions",
     ]
     assert entity.default_options["voice"] == ORPHEUS_ENGLISH_VOICE
     assert entity.default_options["model"] == ORPHEUS_ENGLISH_MODEL
-    assert entity.default_options["response_format"] == "wav"
     assert entity.default_options["vocal_directions"] == ""
     assert entity.supported_languages == ["ar", "en"]
     assert entity.device_info["model"] == ORPHEUS_ENGLISH_MODEL
@@ -357,7 +364,6 @@ async def test_tts_service_options_override_groq_speech_payload():
         "url": "http://example.com",
         "model": "data-model",
         "voice": "data-voice",
-        "response_format": "wav",
         "unique_id": "uid",
     }
     engine = DummyEngine()
@@ -370,7 +376,6 @@ async def test_tts_service_options_override_groq_speech_payload():
             "input": "override input",
             "model": ORPHEUS_ENGLISH_MODEL,
             "voice": ORPHEUS_ENGLISH_VOICE,
-            "response_format": "wav",
             "vocal_directions": "cheerful",
         },
     )
@@ -444,20 +449,25 @@ async def test_tts_async_setup_entry_builds_entities_from_subentries():
                 "name": "Kitchen TTS",
                 "model": ORPHEUS_ENGLISH_MODEL,
                 "voice": ORPHEUS_ENGLISH_VOICE,
-                "response_format": "wav",
                 "vocal_directions": "warm",
             },
         )
     }
     added = []
+    subentry_ids = []
+
+    def add_entities(entities, **kwargs):
+        added.extend(entities)
+        subentry_ids.append(kwargs.get("config_subentry_id"))
 
     await tts.async_setup_entry(
         DummyHass(),
         entry,
-        lambda entities: added.extend(entities),
+        add_entities,
     )
 
     assert len(added) == 1
+    assert subentry_ids == ["subentry-id"]
     assert added[0].unique_id == "subentry-id"
     assert added[0].name == "KITCHEN TTS"
     assert added[0]._engine._url == DEFAULT_TTS_URL
@@ -700,7 +710,29 @@ def test_config_flow_exposes_dedicated_service_subentry_types():
 
 
 @pytest.mark.asyncio
-async def test_text_to_speech_subentry_flow_creates_service_with_api_key(monkeypatch):
+async def test_speech_to_text_subentry_flow_defaults_language_from_hass(monkeypatch):
+    flow = config_flow.GroqServiceSubentryFlow()
+    flow.handler = ("entry-id", FEATURE_SPEECH_TO_TEXT)
+    hass = SimpleNamespace(config=SimpleNamespace(language="fr-FR"))
+    _patch_flow_common(monkeypatch, flow, hass)
+
+    form = await flow.async_step_user()
+
+    assert form["type"] == "form"
+    assert form["step_id"] == FEATURE_SPEECH_TO_TEXT
+    assert (
+        form["data_schema"](
+            {
+                "name": "Speech-to-Text",
+                "model": "whisper-large-v3",
+            }
+        )["language"]
+        == "fr-FR"
+    )
+
+
+@pytest.mark.asyncio
+async def test_text_to_speech_subentry_flow_creates_service(monkeypatch):
     flow = config_flow.GroqServiceSubentryFlow()
     flow.handler = ("entry-id", FEATURE_TEXT_TO_SPEECH)
 
@@ -717,13 +749,10 @@ async def test_text_to_speech_subentry_flow_creates_service_with_api_key(monkeyp
     result = await flow.async_step_user(
         {
             "name": "Kitchen TTS",
-            "api_key": "tts-api-key",
             "model": ORPHEUS_ENGLISH_MODEL,
             "voice": ORPHEUS_ENGLISH_VOICE,
-            "response_format": "wav",
             "vocal_directions": "warm",
             "normalize_audio": False,
-            "protect_free_tier": True,
         }
     )
 
@@ -732,20 +761,56 @@ async def test_text_to_speech_subentry_flow_creates_service_with_api_key(monkeyp
         "title": "Kitchen TTS",
         "data": {
             "name": "Kitchen TTS",
-            "api_key": "tts-api-key",
             "model": ORPHEUS_ENGLISH_MODEL,
             "voice": ORPHEUS_ENGLISH_VOICE,
-            "response_format": "wav",
             "vocal_directions": "warm",
             "normalize_audio": False,
-            "protect_free_tier": True,
             "service_type": FEATURE_TEXT_TO_SPEECH,
         },
     }
 
 
 @pytest.mark.asyncio
-async def test_text_to_speech_subentry_reconfigure_preserves_api_key(monkeypatch):
+async def test_text_to_speech_subentry_flow_clears_voice_when_model_changes(
+    monkeypatch,
+):
+    flow = config_flow.GroqServiceSubentryFlow()
+    flow.handler = ("entry-id", FEATURE_TEXT_TO_SPEECH)
+    _patch_flow_common(monkeypatch, flow)
+
+    result = await flow.async_step_user(
+        {
+            "name": "Kitchen TTS",
+            "model": ORPHEUS_ARABIC_MODEL,
+            "voice": ORPHEUS_ENGLISH_VOICE,
+        }
+    )
+
+    assert result["type"] == "form"
+    assert result["step_id"] == FEATURE_TEXT_TO_SPEECH
+    assert result["errors"] == {"voice": "select_voice_for_model"}
+    assert result["data_schema"](
+        {
+            "name": "Kitchen TTS",
+            "model": ORPHEUS_ARABIC_MODEL,
+            "voice": ORPHEUS_ARABIC_VOICE,
+        }
+    )
+
+    created = await flow.async_step_user(
+        {
+            "name": "Kitchen TTS",
+            "model": ORPHEUS_ARABIC_MODEL,
+            "voice": ORPHEUS_ARABIC_VOICE,
+        }
+    )
+
+    assert created["type"] == "create_entry"
+    assert created["data"]["voice"] == ORPHEUS_ARABIC_VOICE
+
+
+@pytest.mark.asyncio
+async def test_text_to_speech_subentry_reconfigure_replaces_service_data(monkeypatch):
     flow = config_flow.GroqServiceSubentryFlow()
     flow.handler = ("entry-id", FEATURE_TEXT_TO_SPEECH)
     flow.context = {"source": "reconfigure", "subentry_id": "subentry-id"}
@@ -753,13 +818,10 @@ async def test_text_to_speech_subentry_reconfigure_preserves_api_key(monkeypatch
     subentry = SimpleNamespace(
         data={
             "name": "Old TTS",
-            "api_key": "old-service-key",
             "model": ORPHEUS_ENGLISH_MODEL,
             "voice": ORPHEUS_ENGLISH_VOICE,
-            "response_format": "wav",
             "vocal_directions": "warm",
             "normalize_audio": True,
-            "protect_free_tier": True,
             "service_type": FEATURE_TEXT_TO_SPEECH,
         }
     )
@@ -776,17 +838,14 @@ async def test_text_to_speech_subentry_reconfigure_preserves_api_key(monkeypatch
             "name": "Updated TTS",
             "model": ORPHEUS_ENGLISH_MODEL,
             "voice": ORPHEUS_ENGLISH_VOICE,
-            "response_format": "wav",
             "vocal_directions": "",
             "normalize_audio": False,
-            "protect_free_tier": True,
         }
     )
 
     assert result["type"] == "abort"
     assert result["reason"] == "reconfigure_successful"
     assert result["title"] == "Updated TTS"
-    assert result["data"]["api_key"] == "old-service-key"
     assert result["data"]["name"] == "Updated TTS"
     assert result["data"]["vocal_directions"] == ""
     assert result["data"]["normalize_audio"] is False
@@ -804,8 +863,7 @@ async def test_text_generation_subentry_flow_uses_advanced_step(monkeypatch):
 
     advanced = await flow.async_step_text_generation(
         {
-            "name": "Text API Key",
-            "api_key": "text-api-key",
+            "name": "Text Service",
             "model": "openai/gpt-oss-20b",
             "system_prompt": "You are helpful.",
             "temperature": 0.2,
@@ -832,10 +890,9 @@ async def test_text_generation_subentry_flow_uses_advanced_step(monkeypatch):
 
     assert result == {
         "type": "create_entry",
-        "title": "Text API Key",
+        "title": "Text Service",
         "data": {
-            "name": "Text API Key",
-            "api_key": "text-api-key",
+            "name": "Text Service",
             "model": "openai/gpt-oss-20b",
             "system_prompt": "You are helpful.",
             "temperature": 0.2,
@@ -864,7 +921,6 @@ async def test_text_generation_reconfigure_keeps_advanced_defaults_until_edited(
     subentry = SimpleNamespace(
         data={
             "name": "Existing Text",
-            "api_key": "old-text-key",
             "model": "openai/gpt-oss-20b",
             "system_prompt": "Existing prompt.",
             "temperature": 0.3,
@@ -910,7 +966,6 @@ async def test_text_generation_reconfigure_keeps_advanced_defaults_until_edited(
     assert result["type"] == "abort"
     assert result["reason"] == "reconfigure_successful"
     assert result["title"] == "Updated Text"
-    assert result["data"]["api_key"] == "old-text-key"
     assert result["data"]["max_tokens"] == 256
     assert result["data"]["top_p"] == 0.9
     assert "service_tier" not in result["data"]
@@ -974,15 +1029,13 @@ async def test_options_flow_shows_schema_and_saves(monkeypatch):
 
     saved = await flow.async_step_init(
         {
-            "voice": ORPHEUS_ENGLISH_VOICE,
-            "enabled_features": ["text_to_speech", "image_recognition"],
+            "protect_free_tier": False,
         }
     )
     assert saved == {
         "type": "create_entry",
         "title": "",
         "data": {
-            "voice": ORPHEUS_ENGLISH_VOICE,
-            "enabled_features": ["text_to_speech", "image_recognition"],
+            "protect_free_tier": False,
         },
     }

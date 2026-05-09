@@ -42,6 +42,7 @@ CONF_IMAGE_ENTITY_ID = "image_entity_id"
 CONF_RESULT_FORMAT = "result_format"
 CONF_NAME = "name"
 CONF_SERVICE_TYPE = "service_type"
+CONF_SUBENTRY_ID = "subentry_id"
 CONF_LANGUAGE = "language"
 
 FEATURE_TEXT_GENERATION = "text_generation"
@@ -98,6 +99,26 @@ VOICES = [
     "noura",
     "aisha",
 ]
+ENGLISH_ORPHEUS_VOICES = [
+    "autumn",
+    "diana",
+    "hannah",
+    "austin",
+    "daniel",
+    "troy",
+]
+ARABIC_ORPHEUS_VOICES = [
+    "abdullah",
+    "fahad",
+    "sultan",
+    "lulwa",
+    "noura",
+    "aisha",
+]
+TTS_VOICES_BY_MODEL = {
+    "canopylabs/orpheus-v1-english": ENGLISH_ORPHEUS_VOICES,
+    "canopylabs/orpheus-arabic-saudi": ARABIC_ORPHEUS_VOICES,
+}
 DEFAULT_MODEL = MODELS[0]
 DEFAULT_VOICE = VOICES[0]
 RESPONSE_FORMATS = ["wav"]
@@ -166,6 +187,22 @@ STT_MODELS = [
     "whisper-large-v3",
 ]
 DEFAULT_STT_MODEL = "whisper-large-v3-turbo"
+STT_LANGUAGE_OPTIONS = [
+    {"value": "en-US", "label": "English (United States)"},
+    {"value": "en-GB", "label": "English (United Kingdom)"},
+    {"value": "en", "label": "English"},
+    {"value": "de-DE", "label": "German"},
+    {"value": "es-ES", "label": "Spanish"},
+    {"value": "fr-FR", "label": "French"},
+    {"value": "it-IT", "label": "Italian"},
+    {"value": "pt-PT", "label": "Portuguese"},
+    {"value": "nl-NL", "label": "Dutch"},
+    {"value": "ja-JP", "label": "Japanese"},
+    {"value": "ko-KR", "label": "Korean"},
+    {"value": "zh-CN", "label": "Chinese"},
+]
+STT_LANGUAGES = [option["value"] for option in STT_LANGUAGE_OPTIONS]
+DEFAULT_STT_LANGUAGE = "en-US"
 
 VISION_MODELS = [
     "meta-llama/llama-4-scout-17b-16e-instruct",
@@ -253,3 +290,33 @@ def enabled_features_from_entry(entry: Any) -> list[str]:
     if all(entry.data.get(key) for key in (CONF_URL, CONF_MODEL, CONF_VOICE)):
         return [FEATURE_TEXT_TO_SPEECH]
     return []
+
+
+def voice_options_for_model(model: str | None) -> list[str]:
+    """Return valid Orpheus voices for a TTS model."""
+    if not model:
+        return list(VOICES)
+    if model in TTS_VOICES_BY_MODEL:
+        return list(TTS_VOICES_BY_MODEL[model])
+    model_id = model.lower()
+    if "arabic" in model_id or "saudi" in model_id:
+        return list(ARABIC_ORPHEUS_VOICES)
+    if "orpheus" in model_id:
+        return list(ENGLISH_ORPHEUS_VOICES)
+    return list(VOICES)
+
+
+def stt_language_default(language: str | None) -> str:
+    """Return the closest configured STT language for a Home Assistant locale."""
+    if not language:
+        return DEFAULT_STT_LANGUAGE
+    locale = language.replace("_", "-")
+    if locale in STT_LANGUAGES:
+        return locale
+    base_language = locale.split("-", 1)[0]
+    if base_language in STT_LANGUAGES:
+        return base_language
+    for supported_language in STT_LANGUAGES:
+        if supported_language.split("-", 1)[0] == base_language:
+            return supported_language
+    return DEFAULT_STT_LANGUAGE

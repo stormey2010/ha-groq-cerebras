@@ -330,7 +330,7 @@ async def test_api_client_generates_text_and_sends_auth_header():
         TextGenerationRequest(
             prompt="Go",
             model="llama-3.1-8b-instant",
-            api_key="service-api-key",
+            api_key="request-api-key",
         )
     )
 
@@ -341,7 +341,7 @@ async def test_api_client_generates_text_and_sends_auth_header():
         "POST",
         "https://api.groq.com/openai/v1/chat/completions",
     )
-    assert call["kwargs"]["headers"]["Authorization"] == "Bearer service-api-key"
+    assert call["kwargs"]["headers"]["Authorization"] == "Bearer request-api-key"
 
 
 @pytest.mark.asyncio
@@ -710,7 +710,7 @@ async def test_generate_text_service_uses_cache():
 
 
 @pytest.mark.asyncio
-async def test_generate_text_service_uses_selected_subentry_defaults_and_api_key():
+async def test_generate_text_service_uses_selected_subentry_defaults():
     entry = DummyEntry()
     entry.subentries = {
         "text-service": SimpleNamespace(
@@ -718,7 +718,6 @@ async def test_generate_text_service_uses_selected_subentry_defaults_and_api_key
             data={
                 "service_type": "text_generation",
                 "name": "Usage tracked text",
-                "api_key": "service-api-key",
                 "model": "openai/gpt-oss-20b",
                 "system_prompt": "Use Home Assistant context.",
                 "temperature": 0.1,
@@ -755,7 +754,7 @@ async def test_generate_text_service_uses_selected_subentry_defaults_and_api_key
 
     assert response["text"] == "subentry answer"
     call = session.calls[0]
-    assert call["kwargs"]["headers"]["Authorization"] == "Bearer service-api-key"
+    assert call["kwargs"]["headers"]["Authorization"] == "Bearer api-key"
     request_body = call["kwargs"]["json"]
     assert request_body["model"] == "openai/gpt-oss-20b"
     assert request_body["messages"][0] == {
@@ -1059,7 +1058,7 @@ async def test_generate_text_service_supports_compound_models():
 
 
 @pytest.mark.asyncio
-async def test_analyze_image_service_uses_image_subentry_defaults_and_api_key():
+async def test_analyze_image_service_uses_image_subentry_defaults():
     entry = DummyEntry()
     entry.subentries = {
         "vision-service": SimpleNamespace(
@@ -1067,7 +1066,6 @@ async def test_analyze_image_service_uses_image_subentry_defaults_and_api_key():
             data={
                 "service_type": "image_recognition",
                 "name": "Vision usage key",
-                "api_key": "vision-api-key",
                 "model": "meta-llama/llama-4-scout-17b-16e-instruct",
                 "system_prompt": "Describe only visible objects.",
             },
@@ -1104,7 +1102,7 @@ async def test_analyze_image_service_uses_image_subentry_defaults_and_api_key():
 
     assert response["text"] == "A kitchen counter."
     call = session.calls[0]
-    assert call["kwargs"]["headers"]["Authorization"] == "Bearer vision-api-key"
+    assert call["kwargs"]["headers"]["Authorization"] == "Bearer api-key"
     request_body = call["kwargs"]["json"]
     assert request_body["model"] == "meta-llama/llama-4-scout-17b-16e-instruct"
     assert request_body["messages"][0] == {
@@ -1184,12 +1182,11 @@ async def test_conversation_entity_streams_assist_response():
 
 
 @pytest.mark.asyncio
-async def test_stt_entity_transcribes_with_service_api_key():
+async def test_stt_entity_transcribes_with_service_defaults():
     entry = DummyEntry()
     service_data = {
         "unique_id": "stt-service",
         "name": "Groq STT",
-        "api_key": "stt-api-key",
         "model": "whisper-large-v3",
         "language": "en",
     }
@@ -1213,7 +1210,7 @@ async def test_stt_entity_transcribes_with_service_api_key():
 
     assert result.result == stt.SpeechResultState.SUCCESS
     assert result.text == "turn on the kitchen lights"
-    assert client.requests[0]["api_key"] == "stt-api-key"
+    assert "api_key" not in client.requests[0]
     assert client.requests[0]["model"] == "whisper-large-v3"
     assert client.requests[0]["language"] == "en"
 

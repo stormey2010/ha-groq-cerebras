@@ -10,17 +10,18 @@ import wave
 from homeassistant.components import stt
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import (
-    CONF_API_KEY,
     CONF_LANGUAGE,
     CONF_MODEL,
     CONF_NAME,
     CONF_SERVICE_TYPE,
+    CONF_SUBENTRY_ID,
     DEFAULT_STT_MODEL,
     DOMAIN,
     FEATURE_SPEECH_TO_TEXT,
+    STT_LANGUAGES,
     UNIQUE_ID,
 )
 from .errors import GroqApiError
@@ -36,7 +37,9 @@ def _stt_service_data(config_entry: ConfigEntry) -> list[dict]:
         data = dict(getattr(subentry, "data", {}))
         if data.get(CONF_SERVICE_TYPE) != FEATURE_SPEECH_TO_TEXT:
             continue
-        data[UNIQUE_ID] = getattr(subentry, "subentry_id", data.get(UNIQUE_ID))
+        subentry_id = getattr(subentry, "subentry_id", data.get(UNIQUE_ID))
+        data[CONF_SUBENTRY_ID] = subentry_id
+        data[UNIQUE_ID] = subentry_id
         services.append(data)
     return services
 
@@ -44,16 +47,15 @@ def _stt_service_data(config_entry: ConfigEntry) -> list[dict]:
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Groq Speech-to-Text entities."""
     runtime = await async_get_runtime(hass, config_entry)
-    entities = [
-        GroqSTTEntity(config_entry, service_data, runtime.client)
-        for service_data in _stt_service_data(config_entry)
-    ]
-    if entities:
-        async_add_entities(entities)
+    for service_data in _stt_service_data(config_entry):
+        async_add_entities(
+            [GroqSTTEntity(config_entry, service_data, runtime.client)],
+            config_subentry_id=service_data.get(CONF_SUBENTRY_ID),
+        )
 
 
 class GroqSTTEntity(stt.SpeechToTextEntity):
@@ -83,20 +85,7 @@ class GroqSTTEntity(stt.SpeechToTextEntity):
     @property
     def supported_languages(self) -> list[str]:
         """Return supported languages."""
-        return [
-            "en-US",
-            "en-GB",
-            "en",
-            "de-DE",
-            "es-ES",
-            "fr-FR",
-            "it-IT",
-            "pt-PT",
-            "nl-NL",
-            "ja-JP",
-            "ko-KR",
-            "zh-CN",
-        ]
+        return STT_LANGUAGES
 
     @property
     def supported_formats(self) -> list[stt.AudioFormats]:
@@ -178,7 +167,6 @@ class GroqSTTEntity(stt.SpeechToTextEntity):
                 filename=filename,
                 model=self._service_data.get(CONF_MODEL, DEFAULT_STT_MODEL),
                 language=language,
-                api_key=self._service_data.get(CONF_API_KEY),
             )
         except GroqApiError:
             _LOGGER.exception("Error during Groq speech transcription")

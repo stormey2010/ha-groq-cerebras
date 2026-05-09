@@ -5,7 +5,7 @@
 [![Stars](https://img.shields.io/github/stars/barneyonline/ha-groq)](https://github.com/barneyonline/ha-groq/stargazers)
 [![License](https://img.shields.io/github/license/barneyonline/ha-groq)](LICENSE)
 
-[![Tests](https://img.shields.io/github/actions/workflow/status/barneyonline/ha-groq/tests.yml?branch=main&label=tests)](https://github.com/barneyonline/ha-groq/actions/workflows/tests.yml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/barneyonline/ha-groq/ci.yml?branch=main&label=tests)](https://github.com/barneyonline/ha-groq/actions/workflows/ci.yml)
 [![Hassfest](https://img.shields.io/github/actions/workflow/status/barneyonline/ha-groq/hassfest.yml?branch=main&label=hassfest)](https://github.com/barneyonline/ha-groq/actions/workflows/hassfest.yml)
 [![Quality Scale](https://img.shields.io/github/actions/workflow/status/barneyonline/ha-groq/quality-scale.yml?branch=main&label=quality%20scale)](https://developers.home-assistant.io/docs/integration_quality_scale_index)
 
@@ -33,7 +33,7 @@ OCR support is present in the service architecture and model registry, but the s
 
 - Guided onboarding that asks only for a friendly integration name and a hidden Groq API key
 - Service-specific subentry buttons for creating multiple named services under each Groq account
-- Per-service API keys so usage can be tracked separately for Text Generation, Text-to-Speech, Image Recognition, or future service profiles
+- Groq model discovery during service setup, filtered to the selected service type
 - Text Generation entities for Home Assistant Assist conversations and AI Task data generation
 - Streaming Assist responses when Home Assistant requests streaming chat output
 - Default Home Assistant-oriented system prompt for Text Generation services
@@ -88,7 +88,7 @@ Enter a Groq API key during initial setup. The key is stored by Home Assistant a
 
 You can add more Groq accounts from the integration page when you want separate account-level names, default API keys, or billing projects.
 
-Each service can also have its own optional API key. If a service API key is set, that service uses its own key instead of the integration-level key. This is useful when you want separate Groq projects or keys for Text Generation, Text-to-Speech, Image Recognition, or future service types.
+Services use the API key from their parent Groq account. Add another Groq account if you want to use a different key for a separate set of services.
 
 If Groq returns an authentication error, Home Assistant starts a reauthentication flow so you can enter a new key.
 
@@ -161,7 +161,6 @@ data:
   message: The front door has been open for five minutes.
   options:
     voice: hannah
-    response_format: wav
     vocal_directions: calm
 ```
 
@@ -178,7 +177,7 @@ response_variable: groq_image
 
 ## Supported Groq models
 
-Built-in model lists are used when Groq model discovery is unavailable.
+Service setup queries Groq for the active models available to the selected account API key, then filters the list to models that match the service type. Built-in model lists are used only when Groq model discovery is unavailable.
 
 Text Generation:
 - `llama-3.1-8b-instant`

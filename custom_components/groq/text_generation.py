@@ -10,7 +10,6 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 
 from .const import (
-    CONF_API_KEY,
     CONF_INCLUDE_REASONING,
     CONF_MAX_TOKENS,
     CONF_MODEL,
@@ -74,17 +73,6 @@ def service_name(config_entry: ConfigEntry, service_data: dict[str, Any]) -> str
 def service_model(config_entry: ConfigEntry, service_data: dict[str, Any]) -> str:
     """Return the configured text generation model."""
     return str(entry_value(config_entry, service_data, CONF_MODEL, DEFAULT_TEXT_MODEL))
-
-
-def service_api_key(
-    config_entry: ConfigEntry,
-    service_data: dict[str, Any],
-) -> str | None:
-    """Return the optional service-specific API key."""
-    value = service_data.get(CONF_API_KEY)
-    if not value:
-        return None
-    return str(value)
 
 
 def service_system_prompt(

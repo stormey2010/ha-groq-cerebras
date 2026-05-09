@@ -13,7 +13,7 @@
                 },
                 "data_description": {
                     "name": "A friendly name for this Groq account. Use this to identify the API key or billing project.",
-                    "api_key": "The default Groq API key. Individual services can override this with their own API key."
+                    "api_key": "Groq API key for this account. Add another Groq account if you want to use a different key for a separate set of services."
                 }
             },
             "reauth_confirm": {
@@ -34,9 +34,11 @@
             "unsupported_reasoning_model": "The selected model does not support reasoning options.",
             "unsupported_prompt_caching_model": "The selected model does not support Groq prompt caching.",
             "unsupported_structured_outputs_model": "The selected model does not support structured outputs.",
+            "invalid_voice": "The selected voice is not available for the selected model.",
+            "select_voice_for_model": "Select a voice for the selected model.",
             "required": "This field is required.",
             "unknown": "Unexpected error validating the API key. Please try again.",
-            "unknown_error": "Unexpected error — please try again."
+            "unknown_error": "Unexpected error \u2014 please try again."
         }
     },
     "options": {
@@ -45,11 +47,11 @@
                 "title": "Configure Groq options",
                 "data": {
                     "api_key": "Groq API key",
-                    "voice": "Voice",
-                    "normalize_audio": "Enable loudness for generated audio (uses more CPU)",
-                    "protect_free_tier": "Protect Groq free tier usage",
-                    "response_format": "Response format",
-                    "vocal_directions": "Default vocal directions"
+                    "protect_free_tier": "Protect Groq free tier usage"
+                },
+                "data_description": {
+                    "api_key": "Optional replacement API key for this Groq account.",
+                    "protect_free_tier": "Conservatively blocks local TTS requests before built-in Orpheus free-tier limits are exceeded."
                 }
             }
         }
@@ -66,7 +68,6 @@
                     "title": "Text Generation",
                     "data": {
                         "name": "Name",
-                        "api_key": "Groq API key",
                         "model": "Model",
                         "system_prompt": "System prompt",
                         "temperature": "Temperature",
@@ -74,7 +75,6 @@
                     },
                     "data_description": {
                         "name": "A friendly name for this text generation service. Home Assistant uses this for Assist and AI task entities.",
-                        "api_key": "Optional API key for this service. Leave blank to use the integration API key.",
                         "model": "The Groq chat model used for text responses, Assist conversations, and data generation tasks.",
                         "system_prompt": "Instructions that guide the model. The default matches Home Assistant's AI task prompt.",
                         "temperature": "Controls response variation. Lower values are more predictable; higher values are more creative.",
@@ -131,15 +131,13 @@
                     "title": "Speech-to-Text",
                     "data": {
                         "name": "Name",
-                        "api_key": "Groq API key",
                         "model": "Model",
                         "language": "Language"
                     },
                     "data_description": {
                         "name": "A friendly name for this Speech-to-Text service instance.",
-                        "api_key": "Optional API key for this service. Leave blank to use the integration API key.",
                         "model": "The Groq Whisper model used to transcribe audio.",
-                        "language": "Optional ISO language code that hints the audio language."
+                        "language": "Language hint sent to Groq for transcription. Defaults to the language configured in Home Assistant when available."
                     }
                 }
             }
@@ -155,23 +153,17 @@
                     "title": "Text-to-Speech",
                     "data": {
                         "name": "Name",
-                        "api_key": "Groq API key",
                         "model": "Model",
                         "voice": "Voice",
-                        "response_format": "Response format",
                         "vocal_directions": "Default vocal directions",
-                        "normalize_audio": "Enable loudness for generated audio (uses more CPU)",
-                        "protect_free_tier": "Protect Groq free tier usage"
+                        "normalize_audio": "Enable loudness for generated audio (uses more CPU)"
                     },
                     "data_description": {
                         "name": "A friendly name for this Text-to-Speech service instance.",
-                        "api_key": "Optional API key for this service. Leave blank to use the integration API key.",
                         "model": "The Groq speech model used to generate audio.",
-                        "voice": "The voice persona used by the selected speech model.",
-                        "response_format": "The audio format requested from Groq. Orpheus currently uses WAV.",
+                        "voice": "The voice persona used by the selected speech model. Changing the model clears voices that are not available for the new model.",
                         "vocal_directions": "Optional delivery style prepended to speech, such as cheerful or whisper. You can choose a preset or type your own.",
-                        "normalize_audio": "Converts output to normalized MP3 with ffmpeg for more consistent loudness on small speakers.",
-                        "protect_free_tier": "Conservatively blocks local requests before built-in Orpheus free-tier limits are exceeded."
+                        "normalize_audio": "Converts output to normalized MP3 with ffmpeg for more consistent loudness on small speakers."
                     }
                 }
             }
@@ -187,13 +179,11 @@
                     "title": "Image Recognition",
                     "data": {
                         "name": "Name",
-                        "api_key": "Groq API key",
                         "model": "Model",
                         "system_prompt": "System prompt"
                     },
                     "data_description": {
                         "name": "A friendly name for this Image Recognition service instance.",
-                        "api_key": "Optional API key for this service. Leave blank to use the integration API key.",
                         "model": "The Groq vision model used to inspect images.",
                         "system_prompt": "Optional instructions that guide how image questions are answered."
                     }

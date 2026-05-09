@@ -39,30 +39,59 @@ from .const import (
     CONF_VOCAL_DIRECTIONS,
     CONF_VOICE,
     DEFAULT_MODEL,
-    DEFAULT_PROTECT_FREE_TIER,
-    DEFAULT_RESPONSE_FORMAT,
+    DEFAULT_STT_LANGUAGE,
     DEFAULT_STT_MODEL,
     DEFAULT_SYSTEM_PROMPT,
     DEFAULT_TEXT_MODEL,
     DEFAULT_TEXT_TEMPERATURE,
+    DEFAULT_VISION_MODEL,
     DEFAULT_VOICE,
     FEATURE_LABELS,
     MODELS,
-    PROMPT_CACHING_MODELS,
     REASONING_EFFORT_OPTIONS,
     REASONING_FORMAT_OPTIONS,
-    REASONING_MODELS,
-    RESPONSE_FORMATS,
     SERVICE_TIER_OPTIONS,
     SETUP_FEATURES,
+    STT_LANGUAGE_OPTIONS,
+    STT_LANGUAGES,
     STT_MODELS,
-    STRUCTURED_OUTPUTS_MODELS,
     SUPPORTED_FEATURES,
     TEXT_MODELS,
     VISION_MODELS,
     VOCAL_DIRECTION_OPTIONS,
-    VOICES,
+    voice_options_for_model,
 )
+from .feature_registry import GroqFeature
+from .model_registry import GroqModelRegistry
+
+
+def _model_default(
+    values: dict[str, Any],
+    key: str,
+    default: str,
+    options: list[str],
+) -> str:
+    """Return a selector default that exists in the current option set."""
+    if not options:
+        return default
+    configured = values.get(key)
+    if configured in options:
+        return configured
+    if default in options:
+        return default
+    return options[0]
+
+
+def _supports_model_option(
+    registry: GroqModelRegistry | None,
+    model: str,
+    feature: GroqFeature,
+) -> bool:
+    """Return whether a model supports an optional Groq feature."""
+    if not model:
+        return True
+    active_registry = registry or GroqModelRegistry()
+    return active_registry.supports(model, feature)
 
 
 def api_key_selector():
@@ -99,50 +128,69 @@ def service_type_schema() -> vol.Schema:
     )
 
 
-def speech_to_text_schema(user_input: dict[str, Any] | None = None) -> vol.Schema:
+def speech_to_text_schema(
+    user_input: dict[str, Any] | None = None,
+    model_options: list[str] | None = None,
+    default_language: str | None = None,
+) -> vol.Schema:
     """Return the speech-to-text service schema."""
     values = user_input or {}
+    models = model_options or STT_MODELS
+    language_default = _model_default(
+        values,
+        CONF_LANGUAGE,
+        default_language or DEFAULT_STT_LANGUAGE,
+        STT_LANGUAGES,
+    )
     return vol.Schema(
         {
             vol.Required(
                 CONF_NAME,
                 default=values.get(CONF_NAME, "Speech-to-Text"),
             ): str,
-            vol.Optional(CONF_API_KEY): api_key_selector(),
             vol.Required(
                 CONF_MODEL,
-                default=values.get(CONF_MODEL, DEFAULT_STT_MODEL),
-            ): selector({"select": {"options": STT_MODELS, "custom_value": True}}),
-            vol.Optional(
+                default=_model_default(values, CONF_MODEL, DEFAULT_STT_MODEL, models),
+            ): selector({"select": {"options": models}}),
+            vol.Required(
                 CONF_LANGUAGE,
-                default=values.get(CONF_LANGUAGE, ""),
-            ): str,
+                default=language_default,
+            ): selector({"select": {"options": STT_LANGUAGE_OPTIONS}}),
         }
     )
 
 
-def text_to_speech_schema(user_input: dict[str, Any] | None = None) -> vol.Schema:
+def text_to_speech_schema(
+    user_input: dict[str, Any] | None = None,
+    model_options: list[str] | None = None,
+    voice_options: list[str] | None = None,
+    *,
+    clear_voice: bool = False,
+) -> vol.Schema:
     """Return the text-to-speech service schema."""
     values = user_input or {}
+    models = model_options or MODELS
+    selected_model = _model_default(values, CONF_MODEL, DEFAULT_MODEL, models)
+    voices = voice_options or voice_options_for_model(selected_model)
+    voice_field = (
+        vol.Required(CONF_VOICE)
+        if clear_voice
+        else vol.Required(
+            CONF_VOICE,
+            default=_model_default(values, CONF_VOICE, DEFAULT_VOICE, voices),
+        )
+    )
     return vol.Schema(
         {
             vol.Required(
                 CONF_NAME,
                 default=values.get(CONF_NAME, "Text-to-Speech"),
             ): str,
-            vol.Optional(CONF_API_KEY): api_key_selector(),
             vol.Required(
                 CONF_MODEL,
-                default=values.get(CONF_MODEL, DEFAULT_MODEL),
-            ): selector({"select": {"options": MODELS, "custom_value": True}}),
-            vol.Required(
-                CONF_VOICE,
-                default=values.get(CONF_VOICE, DEFAULT_VOICE),
-            ): selector({"select": {"options": VOICES, "custom_value": True}}),
-            vol.Required(
-                CONF_RESPONSE_FORMAT,
-                default=values.get(CONF_RESPONSE_FORMAT, DEFAULT_RESPONSE_FORMAT),
-            ): selector({"select": {"options": RESPONSE_FORMATS}}),
+                default=selected_model,
+            ): selector({"select": {"options": models}}),
+            voice_field: selector({"select": {"options": voices}}),
             vol.Optional(
                 CONF_VOCAL_DIRECTIONS,
                 default=values.get(CONF_VOCAL_DIRECTIONS, ""),
@@ -159,28 +207,29 @@ def text_to_speech_schema(user_input: dict[str, Any] | None = None) -> vol.Schem
                 CONF_NORMALIZE_AUDIO,
                 default=values.get(CONF_NORMALIZE_AUDIO, False),
             ): selector({"boolean": {}}),
-            vol.Optional(
-                CONF_PROTECT_FREE_TIER,
-                default=values.get(CONF_PROTECT_FREE_TIER, DEFAULT_PROTECT_FREE_TIER),
-            ): selector({"boolean": {}}),
         }
     )
 
 
-def image_recognition_schema(user_input: dict[str, Any] | None = None) -> vol.Schema:
+def image_recognition_schema(
+    user_input: dict[str, Any] | None = None,
+    model_options: list[str] | None = None,
+) -> vol.Schema:
     """Return the image recognition service schema."""
     values = user_input or {}
+    models = model_options or VISION_MODELS
     return vol.Schema(
         {
             vol.Required(
                 CONF_NAME,
                 default=values.get(CONF_NAME, "Image Recognition"),
             ): str,
-            vol.Optional(CONF_API_KEY): api_key_selector(),
             vol.Required(
                 CONF_MODEL,
-                default=values.get(CONF_MODEL, VISION_MODELS[0]),
-            ): selector({"select": {"options": VISION_MODELS, "custom_value": True}}),
+                default=_model_default(
+                    values, CONF_MODEL, DEFAULT_VISION_MODEL, models
+                ),
+            ): selector({"select": {"options": models}}),
             vol.Optional(
                 CONF_SYSTEM_PROMPT,
                 default=values.get(CONF_SYSTEM_PROMPT, ""),
@@ -191,20 +240,21 @@ def image_recognition_schema(user_input: dict[str, Any] | None = None) -> vol.Sc
 
 def text_generation_basic_schema(
     user_input: dict[str, Any] | None = None,
+    model_options: list[str] | None = None,
 ) -> vol.Schema:
     """Return the basic text generation service schema."""
     values = user_input or {}
+    models = model_options or TEXT_MODELS
     return vol.Schema(
         {
             vol.Required(
                 CONF_NAME,
                 default=values.get(CONF_NAME, "Text Generation"),
             ): str,
-            vol.Optional(CONF_API_KEY): api_key_selector(),
             vol.Required(
                 CONF_MODEL,
-                default=values.get(CONF_MODEL, DEFAULT_TEXT_MODEL),
-            ): selector({"select": {"options": TEXT_MODELS, "custom_value": True}}),
+                default=_model_default(values, CONF_MODEL, DEFAULT_TEXT_MODEL, models),
+            ): selector({"select": {"options": models}}),
             vol.Optional(
                 CONF_SYSTEM_PROMPT,
                 default=values.get(CONF_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT),
@@ -223,66 +273,82 @@ def text_generation_basic_schema(
 
 def text_generation_advanced_schema(
     user_input: dict[str, Any] | None = None,
+    model_registry: GroqModelRegistry | None = None,
 ) -> vol.Schema:
     """Return advanced text generation request options."""
     values = user_input or {}
-    return vol.Schema(
-        {
-            vol.Optional(CONF_MAX_TOKENS, default=values.get(CONF_MAX_TOKENS)): (
-                selector({"number": {"min": 1, "step": 1, "mode": "box"}})
-            ),
-            vol.Optional(CONF_TOP_P, default=values.get(CONF_TOP_P)): selector(
-                {"number": {"min": 0, "max": 1, "step": 0.01, "mode": "box"}}
-            ),
-            vol.Optional(CONF_STOP, default=values.get(CONF_STOP)): selector(
-                {"text": {"multiline": True}}
-            ),
-            vol.Optional(CONF_SEED, default=values.get(CONF_SEED)): selector(
-                {"number": {"min": 0, "step": 1, "mode": "box"}}
-            ),
-            vol.Optional(
-                CONF_SERVICE_TIER,
-                default=values.get(CONF_SERVICE_TIER, ""),
-            ): selector({"select": {"options": SERVICE_TIER_OPTIONS}}),
-            vol.Optional(CONF_STREAM, default=values.get(CONF_STREAM, True)): selector(
-                {"boolean": {}}
-            ),
-            vol.Optional(
-                CONF_REASONING_EFFORT,
-                default=values.get(CONF_REASONING_EFFORT, ""),
-            ): selector({"select": {"options": REASONING_EFFORT_OPTIONS}}),
-            vol.Optional(
-                CONF_REASONING_FORMAT,
-                default=values.get(CONF_REASONING_FORMAT, ""),
-            ): selector({"select": {"options": REASONING_FORMAT_OPTIONS}}),
-            vol.Optional(
-                CONF_INCLUDE_REASONING,
-                default=values.get(CONF_INCLUDE_REASONING, False),
-            ): selector({"boolean": {}}),
+    model = str(values.get(CONF_MODEL, ""))
+    schema: dict[Any, Any] = {
+        vol.Optional(CONF_MAX_TOKENS, default=values.get(CONF_MAX_TOKENS)): (
+            selector({"number": {"min": 1, "step": 1, "mode": "box"}})
+        ),
+        vol.Optional(CONF_TOP_P, default=values.get(CONF_TOP_P)): selector(
+            {"number": {"min": 0, "max": 1, "step": 0.01, "mode": "box"}}
+        ),
+        vol.Optional(CONF_STOP, default=values.get(CONF_STOP)): selector(
+            {"text": {"multiline": True}}
+        ),
+        vol.Optional(CONF_SEED, default=values.get(CONF_SEED)): selector(
+            {"number": {"min": 0, "step": 1, "mode": "box"}}
+        ),
+        vol.Optional(
+            CONF_SERVICE_TIER,
+            default=values.get(CONF_SERVICE_TIER, ""),
+        ): selector({"select": {"options": SERVICE_TIER_OPTIONS}}),
+        vol.Optional(CONF_STREAM, default=values.get(CONF_STREAM, True)): selector(
+            {"boolean": {}}
+        ),
+    }
+    if _supports_model_option(model_registry, model, GroqFeature.REASONING):
+        schema.update(
+            {
+                vol.Optional(
+                    CONF_REASONING_EFFORT,
+                    default=values.get(CONF_REASONING_EFFORT, ""),
+                ): selector({"select": {"options": REASONING_EFFORT_OPTIONS}}),
+                vol.Optional(
+                    CONF_REASONING_FORMAT,
+                    default=values.get(CONF_REASONING_FORMAT, ""),
+                ): selector({"select": {"options": REASONING_FORMAT_OPTIONS}}),
+                vol.Optional(
+                    CONF_INCLUDE_REASONING,
+                    default=values.get(CONF_INCLUDE_REASONING, False),
+                ): selector({"boolean": {}}),
+            }
+        )
+    if _supports_model_option(model_registry, model, GroqFeature.PROMPT_CACHING):
+        schema[
             vol.Optional(
                 CONF_PROMPT_CACHING,
                 default=values.get(CONF_PROMPT_CACHING, False),
-            ): selector({"boolean": {}}),
-            vol.Optional(
-                CONF_STRUCTURED_OUTPUTS,
-                default=values.get(CONF_STRUCTURED_OUTPUTS, False),
-            ): selector({"boolean": {}}),
-            vol.Optional(
-                CONF_SCHEMA_NAME,
-                default=values.get(CONF_SCHEMA_NAME, "response"),
-            ): str,
-            vol.Optional(CONF_SCHEMA, default=values.get(CONF_SCHEMA, {})): selector(
-                {"object": {}}
-            ),
-            vol.Optional(CONF_STRICT, default=values.get(CONF_STRICT, False)): (
-                selector({"boolean": {}})
-            ),
-            vol.Optional(
-                CONF_REQUEST_BODY_OPTIONS,
-                default=values.get(CONF_REQUEST_BODY_OPTIONS, {}),
-            ): selector({"object": {}}),
-        }
-    )
+            )
+        ] = selector({"boolean": {}})
+    if _supports_model_option(model_registry, model, GroqFeature.STRUCTURED_OUTPUTS):
+        schema.update(
+            {
+                vol.Optional(
+                    CONF_STRUCTURED_OUTPUTS,
+                    default=values.get(CONF_STRUCTURED_OUTPUTS, False),
+                ): selector({"boolean": {}}),
+                vol.Optional(
+                    CONF_SCHEMA_NAME,
+                    default=values.get(CONF_SCHEMA_NAME, "response"),
+                ): str,
+                vol.Optional(
+                    CONF_SCHEMA, default=values.get(CONF_SCHEMA, {})
+                ): selector({"object": {}}),
+                vol.Optional(CONF_STRICT, default=values.get(CONF_STRICT, False)): (
+                    selector({"boolean": {}})
+                ),
+            }
+        )
+    schema[
+        vol.Optional(
+            CONF_REQUEST_BODY_OPTIONS,
+            default=values.get(CONF_REQUEST_BODY_OPTIONS, {}),
+        )
+    ] = selector({"object": {}})
+    return vol.Schema(schema)
 
 
 def entry_defaults(user_input: dict[str, Any]) -> dict[str, Any]:
@@ -313,11 +379,13 @@ async def validate_user_input(user_input: dict[str, Any]) -> None:
 def clean_service_input(user_input: dict[str, Any]) -> dict[str, Any]:
     """Remove blank service fields before storing a subentry."""
     data = dict(user_input)
+    data.pop(CONF_API_KEY, None)
+    data.pop(CONF_RESPONSE_FORMAT, None)
+    data.pop(CONF_PROTECT_FREE_TIER, None)
     # Empty strings come back from optional selectors when the user leaves them
     # blank. Drop those values so service calls can fall back to integration
     # defaults instead of storing meaningless overrides.
     for key in (
-        CONF_API_KEY,
         CONF_ADVANCED_OPTIONS,
         CONF_LANGUAGE,
         CONF_REASONING_EFFORT,
@@ -336,7 +404,10 @@ def clean_service_input(user_input: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-def validate_text_generation_input(user_input: dict[str, Any]) -> dict[str, str]:
+def validate_text_generation_input(
+    user_input: dict[str, Any],
+    model_registry: GroqModelRegistry | None = None,
+) -> dict[str, str]:
     """Return validation errors for text generation options."""
     errors: dict[str, str] = {}
     model = str(user_input.get(CONF_MODEL, ""))
@@ -350,13 +421,16 @@ def validate_text_generation_input(user_input: dict[str, Any]) -> dict[str, str]
             user_input.get(CONF_INCLUDE_REASONING),
         )
     )
-    if has_reasoning_options and model not in REASONING_MODELS:
+    if has_reasoning_options and not _supports_model_option(
+        model_registry, model, GroqFeature.REASONING
+    ):
         errors[CONF_MODEL] = "unsupported_reasoning_model"
-    if user_input.get(CONF_PROMPT_CACHING) and model not in PROMPT_CACHING_MODELS:
+    if user_input.get(CONF_PROMPT_CACHING) and not _supports_model_option(
+        model_registry, model, GroqFeature.PROMPT_CACHING
+    ):
         errors[CONF_MODEL] = "unsupported_prompt_caching_model"
-    if (
-        user_input.get(CONF_STRUCTURED_OUTPUTS)
-        and model not in STRUCTURED_OUTPUTS_MODELS
+    if user_input.get(CONF_STRUCTURED_OUTPUTS) and not _supports_model_option(
+        model_registry, model, GroqFeature.STRUCTURED_OUTPUTS
     ):
         errors[CONF_MODEL] = "unsupported_structured_outputs_model"
     return errors

@@ -11,14 +11,13 @@ from homeassistant.components.conversation import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers import intent
 
 from .api import TextGenerationRequest
-from .const import DOMAIN
+from .const import CONF_SUBENTRY_ID, DOMAIN
 from .runtime import async_get_runtime
 from .text_generation import (
-    service_api_key,
     service_include_reasoning,
     service_max_tokens,
     service_model,
@@ -41,16 +40,15 @@ from .text_generation import (
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Groq Assist conversation entities from text generation services."""
     runtime = await async_get_runtime(hass, config_entry)
-    entities = [
-        GroqConversationEntity(hass, config_entry, service_data, runtime.client)
-        for service_data in text_generation_service_data(config_entry)
-    ]
-    if entities:
-        async_add_entities(entities)
+    for service_data in text_generation_service_data(config_entry):
+        async_add_entities(
+            [GroqConversationEntity(hass, config_entry, service_data, runtime.client)],
+            config_subentry_id=service_data.get(CONF_SUBENTRY_ID),
+        )
 
 
 class GroqConversationEntity(ConversationEntity):
@@ -124,7 +122,6 @@ class GroqConversationEntity(ConversationEntity):
             extra_body=service_request_body_options(
                 self._config_entry, self._service_data
             ),
-            api_key=service_api_key(self._config_entry, self._service_data),
         )
         if service_stream(self._config_entry, self._service_data) and hasattr(
             chat_log, "async_add_delta_content_stream"

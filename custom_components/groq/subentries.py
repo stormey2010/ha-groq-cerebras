@@ -6,7 +6,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 
-from .const import CONF_SERVICE_TYPE, UNIQUE_ID
+from .const import CONF_SERVICE_TYPE, CONF_SUBENTRY_ID, UNIQUE_ID
 
 
 def service_data_by_type(entry: ConfigEntry) -> dict[str, tuple[dict[str, Any], ...]]:
@@ -17,7 +17,9 @@ def service_data_by_type(entry: ConfigEntry) -> dict[str, tuple[dict[str, Any], 
         service_type = data.get(CONF_SERVICE_TYPE)
         if not service_type:
             continue
-        data.setdefault(UNIQUE_ID, getattr(subentry, "subentry_id", None))
+        subentry_id = getattr(subentry, "subentry_id", None)
+        data[CONF_SUBENTRY_ID] = subentry_id
+        data.setdefault(UNIQUE_ID, subentry_id)
         if data.get(UNIQUE_ID) is None:
             data.pop(UNIQUE_ID, None)
         services.setdefault(service_type, []).append(data)

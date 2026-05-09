@@ -250,8 +250,13 @@ def model_from_api(data: dict[str, Any]) -> GroqModel:
 class GroqModelRegistry:
     """Capability-aware registry for built-in and discovered Groq models."""
 
-    def __init__(self, models: Iterable[GroqModel] | None = None) -> None:
-        self._models = dict(BUILT_IN_MODELS)
+    def __init__(
+        self,
+        models: Iterable[GroqModel] | None = None,
+        *,
+        include_built_ins: bool = True,
+    ) -> None:
+        self._models = dict(BUILT_IN_MODELS) if include_built_ins else {}
         if models:
             self.update(models)
 
