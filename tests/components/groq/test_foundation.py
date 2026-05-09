@@ -1122,6 +1122,7 @@ async def test_conversation_entity_generates_assist_response():
         "model": "llama-3.1-8b-instant",
         "system_prompt": DEFAULT_SYSTEM_PROMPT,
         "temperature": 0.2,
+        "stream": False,
     }
     client = DummyTextClient("Turned on the lights.")
     entity = GroqConversationEntity(DummyHass(), entry, service_data, client)

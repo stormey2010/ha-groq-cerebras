@@ -41,7 +41,10 @@ from .const import (
     DEFAULT_MODEL,
     DEFAULT_PROTECT_FREE_TIER,
     DEFAULT_RESPONSE_FORMAT,
+    DEFAULT_STT_MODEL,
     DEFAULT_SYSTEM_PROMPT,
+    DEFAULT_TEXT_MODEL,
+    DEFAULT_TEXT_TEMPERATURE,
     DEFAULT_VOICE,
     FEATURE_LABELS,
     MODELS,
@@ -108,11 +111,11 @@ def speech_to_text_schema(user_input: dict[str, Any] | None = None) -> vol.Schem
             vol.Optional(CONF_API_KEY): api_key_selector(),
             vol.Required(
                 CONF_MODEL,
-                default=values.get(CONF_MODEL, STT_MODELS[0]),
+                default=values.get(CONF_MODEL, DEFAULT_STT_MODEL),
             ): selector({"select": {"options": STT_MODELS, "custom_value": True}}),
             vol.Optional(
                 CONF_LANGUAGE,
-                default=values.get(CONF_LANGUAGE, "en"),
+                default=values.get(CONF_LANGUAGE, ""),
             ): str,
         }
     )
@@ -200,7 +203,7 @@ def text_generation_basic_schema(
             vol.Optional(CONF_API_KEY): api_key_selector(),
             vol.Required(
                 CONF_MODEL,
-                default=values.get(CONF_MODEL, TEXT_MODELS[0]),
+                default=values.get(CONF_MODEL, DEFAULT_TEXT_MODEL),
             ): selector({"select": {"options": TEXT_MODELS, "custom_value": True}}),
             vol.Optional(
                 CONF_SYSTEM_PROMPT,
@@ -208,7 +211,7 @@ def text_generation_basic_schema(
             ): selector({"text": {"multiline": True}}),
             vol.Optional(
                 CONF_TEMPERATURE,
-                default=values.get(CONF_TEMPERATURE, 0.7),
+                default=values.get(CONF_TEMPERATURE, DEFAULT_TEXT_TEMPERATURE),
             ): selector({"number": {"min": 0, "max": 2, "step": 0.1, "mode": "box"}}),
             vol.Optional(
                 CONF_ADVANCED_OPTIONS,
@@ -316,6 +319,7 @@ def clean_service_input(user_input: dict[str, Any]) -> dict[str, Any]:
     for key in (
         CONF_API_KEY,
         CONF_ADVANCED_OPTIONS,
+        CONF_LANGUAGE,
         CONF_REASONING_EFFORT,
         CONF_REASONING_FORMAT,
         CONF_SERVICE_TIER,

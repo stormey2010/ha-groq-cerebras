@@ -660,7 +660,7 @@ def test_flow_schema_and_text_generation_helpers_cover_branches():
     assert entry_value(entry, {}, "missing", "fallback") == "fallback"
     assert text_generation_module.text_generation_service_data(entry) == []
     assert text_generation_module.service_name(entry, {}) == "Groq"
-    assert text_generation_module.service_model(entry, {}) == "llama-3.3-70b-versatile"
+    assert text_generation_module.service_model(entry, {}) == "llama-3.1-8b-instant"
     assert text_generation_module.service_api_key(entry, service_data) is None
     assert (
         text_generation_module.service_api_key(entry, {"api_key": "service-key"})
@@ -685,6 +685,7 @@ def test_flow_schema_and_text_generation_helpers_cover_branches():
     )
     assert service_include_reasoning(entry, service_data) is True
     assert text_generation_module.service_stream(entry, service_data) is True
+    assert text_generation_module.service_stream(entry, {}) is True
     assert text_generation_module.service_prompt_caching(entry, service_data) is True
     assert service_request_body_options(entry, service_data) == {"user": "ha"}
     assert service_request_body_options(entry, {}) is None
@@ -872,6 +873,11 @@ async def test_config_flow_remaining_paths(monkeypatch):
         flow,
         "async_create_entry",
         lambda **kwargs: {"type": "create_entry", **kwargs},
+    )
+    monkeypatch.setattr(
+        config_flow,
+        "async_validate_api_key",
+        lambda hass, api_key: asyncio.sleep(0, result=None),
     )
 
     result = await flow.async_step_user({CONF_API_KEY: "key", CONF_NAME: "Name"})

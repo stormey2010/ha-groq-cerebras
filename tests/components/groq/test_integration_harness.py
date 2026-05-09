@@ -126,10 +126,14 @@ async def test_validate_user_input_rejects_unknown_enabled_features():
 
 
 class DummyGetResponse:
-    status = 200
+    def __init__(self, status: int = 200, payload=None):
+        self.status = status
+        self._payload = payload or {
+            "data": [{"id": "model-a"}, {"name": "model-b"}, "model-c", {}]
+        }
 
     async def json(self):
-        return {"data": [{"id": "model-a"}, {"name": "model-b"}, "model-c", {}]}
+        return self._payload
 
     async def __aenter__(self):
         return self
@@ -139,12 +143,13 @@ class DummyGetResponse:
 
 
 class DummyGetSession:
-    def __init__(self):
+    def __init__(self, response: DummyGetResponse | None = None):
         self.calls = []
+        self._response = response or DummyGetResponse()
 
     def get(self, *args, **kwargs):
         self.calls.append({"args": args, "kwargs": kwargs})
-        return DummyGetResponse()
+        return self._response
 
 
 @pytest.mark.asyncio
@@ -171,6 +176,54 @@ async def test_fetch_available_returns_empty_on_client_error():
     ):
         assert (
             await config_flow.fetch_available(DummyHass(), "https://example.com") == []
+        )
+
+
+@pytest.mark.asyncio
+async def test_async_validate_api_key_accepts_valid_key():
+    session = DummyGetSession()
+
+    with patch.object(config_flow, "async_get_clientsession", return_value=session):
+        assert await config_flow.async_validate_api_key(DummyHass(), "api-key") is None
+
+    assert session.calls[0]["kwargs"]["headers"] == {"Authorization": "Bearer api-key"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("response", "expected"),
+    [
+        (DummyGetResponse(status=401), "invalid_auth"),
+        (DummyGetResponse(status=403), "invalid_auth"),
+        (DummyGetResponse(status=500), "unknown"),
+        (DummyGetResponse(payload={"models": []}), "unknown"),
+    ],
+)
+async def test_async_validate_api_key_maps_error_responses(response, expected):
+    with patch.object(
+        config_flow,
+        "async_get_clientsession",
+        return_value=DummyGetSession(response),
+    ):
+        assert (
+            await config_flow.async_validate_api_key(DummyHass(), "api-key") == expected
+        )
+
+
+@pytest.mark.asyncio
+async def test_async_validate_api_key_maps_connection_errors():
+    class ErrorSession:
+        def get(self, *args, **kwargs):
+            raise aiohttp.ClientError("boom")
+
+    with patch.object(
+        config_flow,
+        "async_get_clientsession",
+        return_value=ErrorSession(),
+    ):
+        assert (
+            await config_flow.async_validate_api_key(DummyHass(), "api-key")
+            == "cannot_connect"
         )
 
 
@@ -481,6 +534,9 @@ async def test_integration_setup_unload_update_and_migration():
 def _patch_flow_common(monkeypatch, flow, hass=None):
     flow.hass = hass or DummyHass()
 
+    async def validate_api_key(_hass, _api_key):
+        return None
+
     def show_form(**kwargs):
         return {"type": "form", **kwargs}
 
@@ -508,6 +564,7 @@ def _patch_flow_common(monkeypatch, flow, hass=None):
         update_and_abort,
         raising=False,
     )
+    monkeypatch.setattr(config_flow, "async_validate_api_key", validate_api_key)
 
 
 @pytest.mark.asyncio
@@ -593,6 +650,39 @@ async def test_config_flow_user_defaults_account_name(monkeypatch):
     assert result["type"] == "create_entry"
     assert result["title"] == "Groq"
     assert result["data"]["name"] == "Groq"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("validation_error", "expected_errors"),
+    [
+        ("invalid_auth", {"api_key": "invalid_auth"}),
+        ("cannot_connect", {"base": "cannot_connect"}),
+        ("unknown", {"base": "unknown"}),
+    ],
+)
+async def test_config_flow_user_shows_api_key_validation_errors(
+    monkeypatch,
+    validation_error,
+    expected_errors,
+):
+    flow = config_flow.GroqConfigFlow()
+    _patch_flow_common(monkeypatch, flow)
+
+    async def set_unique_id(unique_id):
+        return None
+
+    async def validate_api_key(_hass, _api_key):
+        return validation_error
+
+    monkeypatch.setattr(flow, "async_set_unique_id", set_unique_id)
+    monkeypatch.setattr(flow, "_abort_if_unique_id_configured", lambda: None)
+    monkeypatch.setattr(config_flow, "async_validate_api_key", validate_api_key)
+
+    result = await flow.async_step_user({"api_key": "api-key"})
+
+    assert result["type"] == "form"
+    assert result["errors"] == expected_errors
 
 
 def test_config_flow_exposes_dedicated_service_subentry_types():

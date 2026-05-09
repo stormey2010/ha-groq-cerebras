@@ -106,8 +106,8 @@ DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
 DEFAULT_TTS_URL = f"{DEFAULT_BASE_URL}/audio/speech"
 
 TEXT_MODELS = [
-    "llama-3.3-70b-versatile",
     "llama-3.1-8b-instant",
+    "llama-3.3-70b-versatile",
     "openai/gpt-oss-20b",
     "openai/gpt-oss-120b",
     "openai/gpt-oss-safeguard-20b",
@@ -115,7 +115,8 @@ TEXT_MODELS = [
     "groq/compound",
     "groq/compound-mini",
 ]
-DEFAULT_TEXT_MODEL = TEXT_MODELS[0]
+DEFAULT_TEXT_MODEL = "llama-3.1-8b-instant"
+DEFAULT_TEXT_TEMPERATURE = 0.2
 
 REASONING_MODELS = {
     "openai/gpt-oss-20b",
@@ -161,10 +162,10 @@ SERVICE_TIER_OPTIONS = [
 ]
 
 STT_MODELS = [
-    "whisper-large-v3",
     "whisper-large-v3-turbo",
+    "whisper-large-v3",
 ]
-DEFAULT_STT_MODEL = STT_MODELS[0]
+DEFAULT_STT_MODEL = "whisper-large-v3-turbo"
 
 VISION_MODELS = [
     "meta-llama/llama-4-scout-17b-16e-instruct",
@@ -190,7 +191,8 @@ CONF_PROTECT_FREE_TIER = "protect_free_tier"
 DEFAULT_CACHE_SIZE = 256
 DEFAULT_PROTECT_FREE_TIER = True
 DEFAULT_SYSTEM_PROMPT = (
-    "You are a Home Assistant expert and help users with their tasks."
+    "You are a voice assistant for Home Assistant. Answer in plain text. "
+    "Keep it simple and to the point."
 )
 
 GROQ_FREE_TIER_LIMITS = {

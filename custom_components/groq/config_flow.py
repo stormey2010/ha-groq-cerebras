@@ -4,6 +4,7 @@ Config flow for Groq.
 
 from __future__ import annotations
 from typing import Any
+import aiohttp
 import voluptuous as vol
 import logging
 import uuid
@@ -54,6 +55,9 @@ from .flow_schemas import (
 
 _LOGGER = logging.getLogger(__name__)
 
+MODELS_ENDPOINT = "https://api.groq.com/openai/v1/models"
+API_KEY_VALIDATION_TIMEOUT = 10
+
 
 def generate_entry_id() -> str:
     return str(uuid.uuid4())
@@ -85,6 +89,40 @@ async def fetch_available(hass, endpoint: str, api_key: str | None = None) -> li
     return []
 
 
+async def async_validate_api_key(hass, api_key: str) -> str | None:
+    """Validate a Groq API key against a lightweight authenticated endpoint."""
+    session = async_get_clientsession(hass)
+    headers = {"Authorization": f"Bearer {api_key}"}
+    try:
+        async with session.get(
+            MODELS_ENDPOINT,
+            headers=headers,
+            timeout=API_KEY_VALIDATION_TIMEOUT,
+        ) as resp:
+            if resp.status in (401, 403):
+                return "invalid_auth"
+            if resp.status != 200:
+                _LOGGER.debug(
+                    "Groq API key validation failed with status %s", resp.status
+                )
+                return "unknown"
+            try:
+                data = await resp.json()
+            except (aiohttp.ContentTypeError, ValueError) as err:
+                _LOGGER.debug("Groq API key validation returned invalid JSON: %s", err)
+                return "unknown"
+            if not isinstance(data, dict) or not isinstance(data.get("data"), list):
+                _LOGGER.debug("Groq API key validation returned unexpected payload")
+                return "unknown"
+    except (aiohttp.ClientError, TimeoutError) as err:
+        _LOGGER.debug("Could not connect to Groq while validating API key: %s", err)
+        return "cannot_connect"
+    except Exception as err:  # pylint: disable=broad-except
+        _LOGGER.exception("Unexpected error validating Groq API key: %s", err)
+        return "unknown"
+    return None
+
+
 def is_tts_model(model: str) -> bool:
     """Return True for Groq model ids that look usable for speech output."""
     model_id = model.lower()
@@ -100,8 +138,7 @@ def get_model_options(discovered_models: list[str]) -> list[str]:
 
 async def get_dynamic_options(hass, api_key: str | None) -> tuple[list[str], list[str]]:
     """Return a dynamic list of models and the built-in voices."""
-    models_endpoint = "https://api.groq.com/openai/v1/models"
-    models = get_model_options(await fetch_available(hass, models_endpoint, api_key))
+    models = get_model_options(await fetch_available(hass, MODELS_ENDPOINT, api_key))
     voices = VOICES
     return models, voices
 
@@ -128,12 +165,21 @@ class GroqConfigFlow(ConfigFlow, domain=DOMAIN):
                 # Allow multiple named Groq accounts, but do not create a
                 # duplicate account for the same API key.
                 self._abort_if_unique_id_configured()
-                # Store unique id in data for backward-compat device identifiers
-                entry_data[UNIQUE_ID] = unique_id
-                return self.async_create_entry(
-                    title=entry_data[CONF_NAME],
-                    data=entry_data,
+                validation_error = await async_validate_api_key(
+                    self.hass,
+                    entry_data[CONF_API_KEY],
                 )
+                if validation_error == "invalid_auth":
+                    errors[CONF_API_KEY] = validation_error
+                elif validation_error is not None:
+                    errors["base"] = validation_error
+                else:
+                    # Store unique id in data for backward-compat device identifiers
+                    entry_data[UNIQUE_ID] = unique_id
+                    return self.async_create_entry(
+                        title=entry_data[CONF_NAME],
+                        data=entry_data,
+                    )
             except data_entry_flow.AbortFlow:
                 return self.async_abort(reason="already_configured")
             except ValueError as e:

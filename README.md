@@ -102,7 +102,7 @@ Use the generated Conversation entity with Home Assistant Assist, the generated 
 action: groq.generate_text
 data:
   prompt: Summarize the current home status for a dashboard notification.
-  model: llama-3.3-70b-versatile
+  model: llama-3.1-8b-instant
   temperature: 0.2
 response_variable: groq_text
 ```
@@ -181,8 +181,8 @@ response_variable: groq_image
 Built-in model lists are used when Groq model discovery is unavailable.
 
 Text Generation:
-- `llama-3.3-70b-versatile`
 - `llama-3.1-8b-instant`
+- `llama-3.3-70b-versatile`
 - `openai/gpt-oss-20b`
 - `openai/gpt-oss-120b`
 - `openai/gpt-oss-safeguard-20b`
@@ -210,8 +210,8 @@ Image Recognition:
 - `meta-llama/llama-4-maverick-17b-128e-instruct`
 
 Speech-to-Text profiles:
-- `whisper-large-v3`
 - `whisper-large-v3-turbo`
+- `whisper-large-v3`
 
 ## Diagnostics
 

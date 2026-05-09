@@ -9,4 +9,6 @@ requires-python = ">=3.14"
 target-version = "py313"
 
 [tool.black]
-target-version = ["py314"]
+# Keep Black aligned with Ruff until Ruff exposes py314; otherwise Black emits
+# Python 3.14 syntax that Ruff cannot parse yet.
+target-version = ["py313"]

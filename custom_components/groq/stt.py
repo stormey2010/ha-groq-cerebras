@@ -18,9 +18,9 @@ from .const import (
     CONF_MODEL,
     CONF_NAME,
     CONF_SERVICE_TYPE,
+    DEFAULT_STT_MODEL,
     DOMAIN,
     FEATURE_SPEECH_TO_TEXT,
-    STT_MODELS,
     UNIQUE_ID,
 )
 from .errors import GroqApiError
@@ -144,7 +144,7 @@ class GroqSTTEntity(stt.SpeechToTextEntity):
         return {
             "identifiers": {(DOMAIN, self._service_unique_id)},
             "manufacturer": "Groq",
-            "model": self._service_data.get(CONF_MODEL, STT_MODELS[0]),
+            "model": self._service_data.get(CONF_MODEL, DEFAULT_STT_MODEL),
             "name": self._attr_name,
         }
 
@@ -176,7 +176,7 @@ class GroqSTTEntity(stt.SpeechToTextEntity):
             text = await self._client.async_transcribe_audio(
                 audio=audio_data,
                 filename=filename,
-                model=self._service_data.get(CONF_MODEL, STT_MODELS[0]),
+                model=self._service_data.get(CONF_MODEL, DEFAULT_STT_MODEL),
                 language=language,
                 api_key=self._service_data.get(CONF_API_KEY),
             )

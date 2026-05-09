@@ -25,6 +25,8 @@
             }
         },
         "error": {
+            "cannot_connect": "Could not connect to Groq. Please check your network connection and try again.",
+            "invalid_auth": "Invalid Groq API key. Please enter a valid key.",
             "wrong_api_key": "Invalid API key. Please enter a valid API key.",
             "invalid_url": "Invalid URL. Please enter a valid URL.",
             "invalid_enabled_features": "One or more selected features are not supported.",
@@ -33,6 +35,7 @@
             "unsupported_prompt_caching_model": "The selected model does not support Groq prompt caching.",
             "unsupported_structured_outputs_model": "The selected model does not support structured outputs.",
             "required": "This field is required.",
+            "unknown": "Unexpected error validating the API key. Please try again.",
             "unknown_error": "Unexpected error — please try again."
         }
     },

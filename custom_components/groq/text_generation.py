@@ -31,10 +31,10 @@ from .const import (
     CONF_TEMPERATURE,
     CONF_TOP_P,
     DEFAULT_SYSTEM_PROMPT,
+    DEFAULT_TEXT_MODEL,
     FEATURE_TEXT_GENERATION,
     PROMPT_CACHING_MODELS,
     REASONING_MODELS,
-    TEXT_MODELS,
     UNIQUE_ID,
 )
 from .subentries import service_data_for_type
@@ -73,7 +73,7 @@ def service_name(config_entry: ConfigEntry, service_data: dict[str, Any]) -> str
 
 def service_model(config_entry: ConfigEntry, service_data: dict[str, Any]) -> str:
     """Return the configured text generation model."""
-    return str(entry_value(config_entry, service_data, CONF_MODEL, TEXT_MODELS[0]))
+    return str(entry_value(config_entry, service_data, CONF_MODEL, DEFAULT_TEXT_MODEL))
 
 
 def service_api_key(
@@ -204,7 +204,7 @@ def service_stream(
     service_data: dict[str, Any],
 ) -> bool:
     """Return whether this service should stream Assist responses."""
-    return bool(entry_value(config_entry, service_data, CONF_STREAM, False))
+    return bool(entry_value(config_entry, service_data, CONF_STREAM, True))
 
 
 def service_prompt_caching(
