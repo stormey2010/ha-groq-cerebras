@@ -29,7 +29,7 @@ def test_hacs_minimum_homeassistant_version_is_declared() -> None:
     root = Path(__file__).resolve().parents[3]
     hacs = json.loads((root / "hacs.json").read_text(encoding="utf-8"))
 
-    assert hacs["name"] == "Groq Speech Service"
+    assert hacs["name"] == "Groq"
     assert hacs["render_readme"] is True
     assert hacs["homeassistant"]
 

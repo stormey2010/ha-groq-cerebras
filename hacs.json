@@ -1,5 +1,5 @@
 {
-    "name": "Groq Speech Service",
+    "name": "Groq",
     "homeassistant": "2024.5.3",
     "render_readme": true
 }
