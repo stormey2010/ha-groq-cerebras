@@ -2,20 +2,39 @@
 
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+Security fixes are only guaranteed for the latest published release and the current `main` branch.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+| Version | Supported |
+| ------- | --------- |
+| Latest release | Yes |
+| `main` | Yes |
+| Older releases | No |
+
+If you are running an older release, update to the latest published version before reporting a security issue unless the issue prevents you from upgrading safely.
 
 ## Reporting a Vulnerability
 
-Use this section to tell people how to report a vulnerability.
+Do not open public GitHub issues, discussions, or pull requests for suspected security vulnerabilities.
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+Use GitHub's private vulnerability reporting for this repository:
+
+1. Open the repository's `Security` tab.
+2. Choose `Report a vulnerability`.
+3. Include a clear description of the issue, affected versions, impact, and reproduction steps.
+4. Attach sanitized logs, diagnostics, screenshots, or sample payloads if they help explain the issue.
+
+Please include:
+
+- The integration version and Home Assistant version.
+- The affected Groq service type, such as text generation, speech-to-text, text-to-speech, vision, or diagnostics.
+- Any affected Groq model, voice, endpoint, or advanced request option.
+- Any required configuration or environment details.
+- Whether the issue exposes API keys, credentials, personal data, audio, images, prompts, generated responses, or Home Assistant device control.
+- Any mitigation you have already confirmed.
+
+Response targets:
+
+- Initial triage response within 7 days.
+- Status updates at least every 14 days while the report is being investigated.
+
+If the report is accepted, the maintainer will work on a fix, prepare a release, and coordinate disclosure timing when needed. If the report is declined, you will receive a short explanation so you can decide whether to provide more detail or pursue a non-security bug report instead.
