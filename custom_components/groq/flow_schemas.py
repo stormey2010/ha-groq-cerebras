@@ -39,6 +39,7 @@ from .const import (
     CONF_VOCAL_DIRECTIONS,
     CONF_VOICE,
     DEFAULT_MODEL,
+    DEFAULT_PROTECT_FREE_TIER,
     DEFAULT_STT_LANGUAGE,
     DEFAULT_STT_MODEL,
     DEFAULT_SYSTEM_PROMPT,
@@ -62,7 +63,7 @@ from .const import (
     voice_options_for_model,
 )
 from .feature_registry import GroqFeature
-from .model_registry import GroqModelRegistry
+from .model_registry import GroqCapability, GroqModelRegistry
 
 
 def _model_default(
@@ -92,6 +93,51 @@ def _supports_model_option(
         return True
     active_registry = registry or GroqModelRegistry()
     return active_registry.supports(model, feature)
+
+
+def text_generation_model_capability_summary(
+    model: str,
+    registry: GroqModelRegistry | None = None,
+) -> str:
+    """Return a short user-facing capability summary for a text model."""
+    active_registry = registry or GroqModelRegistry()
+    model_data = active_registry.get(model)
+    capabilities = model_data.capabilities if model_data else frozenset()
+    supported: list[str] = []
+    unsupported: list[str] = []
+    supported.append("Assist")
+    if GroqCapability.STRUCTURED_OUTPUTS in capabilities:
+        supported.append("data generation tasks")
+        supported.append("structured outputs")
+    else:
+        unsupported.append("data generation tasks")
+    if GroqCapability.REASONING in capabilities:
+        supported.append("reasoning")
+    if GroqCapability.PROMPT_CACHING in capabilities:
+        supported.append("prompt caching")
+    if GroqCapability.COMPOUND in capabilities:
+        supported.append("Groq Compound tools")
+    if GroqCapability.VISION in capabilities:
+        supported.append("image input")
+
+    summary = f"Supported: {', '.join(supported)}."
+    if unsupported:
+        summary = f"{summary} Not supported: {', '.join(unsupported)}."
+    return summary
+
+
+def text_generation_model_select_options(
+    models: list[str],
+    registry: GroqModelRegistry | None = None,
+) -> list[dict[str, str]]:
+    """Return text generation model options with capability labels."""
+    return [
+        {
+            "value": model,
+            "label": f"{model} - {text_generation_model_capability_summary(model, registry)}",
+        }
+        for model in models
+    ]
 
 
 def api_key_selector():
@@ -128,6 +174,17 @@ def service_type_schema() -> vol.Schema:
     )
 
 
+def _protect_free_tier_field(values: dict[str, Any]) -> tuple[Any, Any]:
+    """Return the shared per-service free-tier protection schema field."""
+    return (
+        vol.Optional(
+            CONF_PROTECT_FREE_TIER,
+            default=values.get(CONF_PROTECT_FREE_TIER, DEFAULT_PROTECT_FREE_TIER),
+        ),
+        selector({"boolean": {}}),
+    )
+
+
 def speech_to_text_schema(
     user_input: dict[str, Any] | None = None,
     model_options: list[str] | None = None,
@@ -136,6 +193,7 @@ def speech_to_text_schema(
     """Return the speech-to-text service schema."""
     values = user_input or {}
     models = model_options or STT_MODELS
+    protect_field, protect_selector = _protect_free_tier_field(values)
     language_default = _model_default(
         values,
         CONF_LANGUAGE,
@@ -156,6 +214,7 @@ def speech_to_text_schema(
                 CONF_LANGUAGE,
                 default=language_default,
             ): selector({"select": {"options": STT_LANGUAGE_OPTIONS}}),
+            protect_field: protect_selector,
         }
     )
 
@@ -170,6 +229,7 @@ def text_to_speech_schema(
     """Return the text-to-speech service schema."""
     values = user_input or {}
     models = model_options or MODELS
+    protect_field, protect_selector = _protect_free_tier_field(values)
     selected_model = _model_default(values, CONF_MODEL, DEFAULT_MODEL, models)
     voices = voice_options or voice_options_for_model(selected_model)
     voice_field = (
@@ -207,6 +267,7 @@ def text_to_speech_schema(
                 CONF_NORMALIZE_AUDIO,
                 default=values.get(CONF_NORMALIZE_AUDIO, False),
             ): selector({"boolean": {}}),
+            protect_field: protect_selector,
         }
     )
 
@@ -218,6 +279,7 @@ def image_recognition_schema(
     """Return the image recognition service schema."""
     values = user_input or {}
     models = model_options or VISION_MODELS
+    protect_field, protect_selector = _protect_free_tier_field(values)
     return vol.Schema(
         {
             vol.Required(
@@ -234,6 +296,7 @@ def image_recognition_schema(
                 CONF_SYSTEM_PROMPT,
                 default=values.get(CONF_SYSTEM_PROMPT, ""),
             ): str,
+            protect_field: protect_selector,
         }
     )
 
@@ -241,10 +304,12 @@ def image_recognition_schema(
 def text_generation_basic_schema(
     user_input: dict[str, Any] | None = None,
     model_options: list[str] | None = None,
+    model_registry: GroqModelRegistry | None = None,
 ) -> vol.Schema:
     """Return the basic text generation service schema."""
     values = user_input or {}
     models = model_options or TEXT_MODELS
+    protect_field, protect_selector = _protect_free_tier_field(values)
     return vol.Schema(
         {
             vol.Required(
@@ -254,7 +319,16 @@ def text_generation_basic_schema(
             vol.Required(
                 CONF_MODEL,
                 default=_model_default(values, CONF_MODEL, DEFAULT_TEXT_MODEL, models),
-            ): selector({"select": {"options": models}}),
+            ): selector(
+                {
+                    "select": {
+                        "options": text_generation_model_select_options(
+                            models,
+                            model_registry,
+                        )
+                    }
+                }
+            ),
             vol.Optional(
                 CONF_SYSTEM_PROMPT,
                 default=values.get(CONF_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT),
@@ -267,6 +341,7 @@ def text_generation_basic_schema(
                 CONF_ADVANCED_OPTIONS,
                 default=values.get(CONF_ADVANCED_OPTIONS, False),
             ): selector({"boolean": {}}),
+            protect_field: protect_selector,
         }
     )
 
@@ -381,7 +456,6 @@ def clean_service_input(user_input: dict[str, Any]) -> dict[str, Any]:
     data = dict(user_input)
     data.pop(CONF_API_KEY, None)
     data.pop(CONF_RESPONSE_FORMAT, None)
-    data.pop(CONF_PROTECT_FREE_TIER, None)
     # Empty strings come back from optional selectors when the user leaves them
     # blank. Drop those values so service calls can fall back to integration
     # defaults instead of storing meaningless overrides.

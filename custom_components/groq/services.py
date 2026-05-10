@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+from base64 import b64encode
 from hashlib import sha256
 import json
+import mimetypes
+from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
 
+from homeassistant.components import camera
+from homeassistant.components.media_source import (
+    Unresolvable,
+    async_resolve_media,
+    is_media_source_id,
+)
+from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import (
     HomeAssistant,
@@ -17,6 +27,7 @@ from homeassistant.core import (
 )
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import service as service_helper
 
 from .api import (
     StructuredGenerationRequest,
@@ -27,6 +38,7 @@ from .const import (
     CONF_INCLUDE_REASONING,
     CONF_MAX_TOKENS,
     CONF_NAME,
+    CONF_PROTECT_FREE_TIER,
     CONF_REASONING_EFFORT,
     CONF_REASONING_FORMAT,
     CONF_REQUEST_BODY_OPTIONS,
@@ -38,18 +50,16 @@ from .const import (
     CONF_STRUCTURED_OUTPUTS,
     CONF_TEMPERATURE,
     CONF_TOP_P,
+    DEFAULT_PROTECT_FREE_TIER,
     DEFAULT_SYSTEM_PROMPT,
+    DEFAULT_TEXT_MODEL,
     DOMAIN,
     FEATURE_IMAGE_RECOGNITION,
     FEATURE_TEXT_GENERATION,
     UNIQUE_ID,
 )
 from .feature_registry import GroqFeature
-from .model_registry import (
-    DEFAULT_STRUCTURED_MODEL,
-    DEFAULT_TEXT_MODEL,
-    DEFAULT_VISION_MODEL,
-)
+from .model_registry import DEFAULT_STRUCTURED_MODEL, DEFAULT_VISION_MODEL
 from .runtime import GroqRuntimeData, async_get_runtime
 from .subentries import service_data_for_type
 
@@ -72,6 +82,8 @@ ATTR_SCHEMA = "schema"
 ATTR_SCHEMA_NAME = "schema_name"
 ATTR_STRICT = "strict"
 ATTR_IMAGE_URL = "image_url"
+ATTR_IMAGE_FILE = "image_file"
+ATTR_IMAGE_PATH = "image_path"
 ATTR_REFRESH = "refresh"
 
 SERVICE_GENERATE_TEXT = "generate_text"
@@ -122,16 +134,20 @@ GENERATE_STRUCTURED_SCHEMA = vol.Schema(
 )
 VISION_SCHEMA = vol.Schema(
     {
+        **cv.TARGET_SERVICE_FIELDS,
         _ENTRY_SELECTOR: cv.string,
         _SERVICE_SELECTOR: cv.string,
         _MODEL_SELECTOR: cv.string,
         vol.Required(ATTR_PROMPT): cv.string,
         vol.Optional(ATTR_SYSTEM_PROMPT): cv.string,
-        vol.Required(ATTR_IMAGE_URL): cv.string,
+        vol.Optional(ATTR_IMAGE_FILE): cv.string,
+        vol.Optional(ATTR_IMAGE_PATH): cv.string,
+        vol.Optional(ATTR_IMAGE_URL): cv.string,
     }
 )
 OCR_SCHEMA = vol.Schema(
     {
+        **cv.TARGET_SERVICE_FIELDS,
         _ENTRY_SELECTOR: cv.string,
         _SERVICE_SELECTOR: cv.string,
         _MODEL_SELECTOR: cv.string,
@@ -140,7 +156,9 @@ OCR_SCHEMA = vol.Schema(
             default="Extract all visible text from this image. Return only the text.",
         ): cv.string,
         vol.Optional(ATTR_SYSTEM_PROMPT): cv.string,
-        vol.Required(ATTR_IMAGE_URL): cv.string,
+        vol.Optional(ATTR_IMAGE_FILE): cv.string,
+        vol.Optional(ATTR_IMAGE_PATH): cv.string,
+        vol.Optional(ATTR_IMAGE_URL): cv.string,
     }
 )
 CLEAR_CACHE_SCHEMA = vol.Schema({_ENTRY_SELECTOR: cv.string})
@@ -256,6 +274,11 @@ def _service_value(
     if key in call.data:
         return call.data[key]
     return service_data.get(key, default)
+
+
+def _service_protect_free_tier(service_data: dict[str, Any]) -> bool:
+    """Return whether local free-tier protection is enabled for this service."""
+    return bool(service_data.get(CONF_PROTECT_FREE_TIER, DEFAULT_PROTECT_FREE_TIER))
 
 
 def _ensure_feature(runtime: GroqRuntimeData, feature: GroqFeature) -> None:
@@ -374,6 +397,91 @@ def _cache_set(
         runtime.prompt_cache.set(key, response)
 
 
+def _image_data_url(content: bytes, content_type: str | None) -> str:
+    """Return an image data URL from binary content."""
+    media_type = content_type or "image/jpeg"
+    return f"data:{media_type};base64,{b64encode(content).decode('ascii')}"
+
+
+async def _image_from_camera_target(
+    hass: HomeAssistant,
+    call: ServiceCall,
+) -> str | None:
+    """Return a data URL from the targeted camera entity, if one was selected."""
+    if direct_entity_id := call.data.get(ATTR_ENTITY_ID):
+        entity_ids = cv.ensure_list(direct_entity_id)
+    elif any(
+        call.data.get(target_key)
+        for target_key in ("device_id", "area_id", "floor_id", "label_id")
+    ):
+        entity_ids = await service_helper.async_extract_entity_ids(call)
+    else:
+        return None
+    camera_entities = sorted(
+        entity_id for entity_id in entity_ids if entity_id.startswith("camera.")
+    )
+    if not camera_entities:
+        return None
+    if len(camera_entities) > 1:
+        raise ServiceValidationError("Select only one camera entity")
+    try:
+        image = await camera.async_get_image(hass, camera_entities[0])
+    except Exception as err:  # pylint: disable=broad-except
+        raise ServiceValidationError(
+            f"Could not capture image from camera entity {camera_entities[0]}"
+        ) from err
+    return _image_data_url(image.content, image.content_type)
+
+
+async def _image_from_local_path(hass: HomeAssistant, image_path: str) -> str:
+    """Return a data URL from an allowlisted local image path."""
+    allowed = await hass.async_add_executor_job(hass.config.is_allowed_path, image_path)
+    if not allowed:
+        raise ServiceValidationError(
+            "Local image path is not in Home Assistant's allowlist_external_dirs"
+        )
+    path = Path(image_path)
+    if not await hass.async_add_executor_job(path.is_file):
+        raise ServiceValidationError(f"Local image file not found: {image_path}")
+    content_type = mimetypes.guess_type(image_path)[0] or "image/jpeg"
+    if not content_type.startswith("image/"):
+        raise ServiceValidationError(f"Local file is not an image: {image_path}")
+    content = await hass.async_add_executor_job(path.read_bytes)
+    return _image_data_url(content, content_type)
+
+
+async def _image_from_media_source(hass: HomeAssistant, image_file: str) -> str:
+    """Return a data URL or URL from a Home Assistant media-source image."""
+    if not is_media_source_id(image_file):
+        return await _image_from_local_path(hass, image_file)
+    try:
+        media = await async_resolve_media(hass, image_file, None)
+    except Unresolvable as err:
+        raise ServiceValidationError(
+            f"Could not resolve image file: {image_file}"
+        ) from err
+    if media.path is not None:
+        return await _image_from_local_path(hass, str(media.path))
+    if media.mime_type and media.mime_type.startswith("image/"):
+        return media.url
+    raise ServiceValidationError(f"Selected media is not an image: {image_file}")
+
+
+async def _image_url_from_call(hass: HomeAssistant, call: ServiceCall) -> str:
+    """Resolve the image source selected for a vision service call."""
+    if camera_image := await _image_from_camera_target(hass, call):
+        return camera_image
+    if image_file := call.data.get(ATTR_IMAGE_FILE):
+        return await _image_from_media_source(hass, image_file)
+    if image_path := call.data.get(ATTR_IMAGE_PATH):
+        return await _image_from_local_path(hass, image_path)
+    if image_url := call.data.get(ATTR_IMAGE_URL):
+        return image_url
+    raise ServiceValidationError(
+        "Select a camera target, image file, local image path, or image URL"
+    )
+
+
 def _handle_generate_text(hass: HomeAssistant):
     """Build the generate_text service handler."""
 
@@ -403,6 +511,8 @@ def _handle_generate_text(hass: HomeAssistant):
                     DEFAULT_SYSTEM_PROMPT,
                 ),
                 **_request_options(call.data, service_data),
+                service_id=service_data.get(UNIQUE_ID),
+                protect_free_tier=_service_protect_free_tier(service_data),
                 schema=schema,
                 schema_name=_service_value(
                     call,
@@ -423,6 +533,8 @@ def _handle_generate_text(hass: HomeAssistant):
                     DEFAULT_SYSTEM_PROMPT,
                 ),
                 **_request_options(call.data, service_data),
+                service_id=service_data.get(UNIQUE_ID),
+                protect_free_tier=_service_protect_free_tier(service_data),
             )
         key = _cache_key(
             "text_generation",
@@ -475,6 +587,8 @@ def _handle_generate_structured(hass: HomeAssistant):
             model=model,
             system_prompt=_service_value(call, service_data, ATTR_SYSTEM_PROMPT),
             **_request_options(call.data, service_data),
+            service_id=service_data.get(UNIQUE_ID),
+            protect_free_tier=_service_protect_free_tier(service_data),
             schema=call.data[ATTR_SCHEMA],
             schema_name=_service_value(
                 call,
@@ -522,7 +636,9 @@ def _handle_analyze_image(hass: HomeAssistant):
             prompt=call.data[ATTR_PROMPT],
             model=model,
             system_prompt=_service_value(call, service_data, ATTR_SYSTEM_PROMPT),
-            image_url=call.data[ATTR_IMAGE_URL],
+            image_url=await _image_url_from_call(hass, call),
+            service_id=service_data.get(UNIQUE_ID),
+            protect_free_tier=_service_protect_free_tier(service_data),
         )
         key = _cache_key(
             "vision",
@@ -565,7 +681,9 @@ def _handle_extract_text_from_image(hass: HomeAssistant):
             prompt=call.data[ATTR_PROMPT],
             model=model,
             system_prompt=_service_value(call, service_data, ATTR_SYSTEM_PROMPT),
-            image_url=call.data[ATTR_IMAGE_URL],
+            image_url=await _image_url_from_call(hass, call),
+            service_id=service_data.get(UNIQUE_ID),
+            protect_free_tier=_service_protect_free_tier(service_data),
         )
         key = _cache_key(
             "ocr",

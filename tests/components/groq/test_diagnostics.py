@@ -53,7 +53,6 @@ async def test_config_entry_diagnostics_redacts_api_keys() -> None:
                 "vocal_directions_configured": True,
                 "normalize_audio": True,
                 "cache_size": 64,
-                "protect_free_tier": False,
             }
         },
     }

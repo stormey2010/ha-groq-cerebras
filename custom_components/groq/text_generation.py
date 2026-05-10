@@ -15,6 +15,7 @@ from .const import (
     CONF_MODEL,
     CONF_NAME,
     CONF_PROMPT_CACHING,
+    CONF_PROTECT_FREE_TIER,
     CONF_REASONING_EFFORT,
     CONF_REASONING_FORMAT,
     CONF_REQUEST_BODY_OPTIONS,
@@ -31,6 +32,7 @@ from .const import (
     CONF_TOP_P,
     DEFAULT_SYSTEM_PROMPT,
     DEFAULT_TEXT_MODEL,
+    DEFAULT_PROTECT_FREE_TIER,
     FEATURE_TEXT_GENERATION,
     PROMPT_CACHING_MODELS,
     REASONING_MODELS,
@@ -201,6 +203,14 @@ def service_prompt_caching(
 ) -> bool:
     """Return whether Groq prompt caching is enabled for the model."""
     return bool(entry_value(config_entry, service_data, CONF_PROMPT_CACHING, False))
+
+
+def service_protect_free_tier(
+    config_entry: ConfigEntry,
+    service_data: dict[str, Any],
+) -> bool:
+    """Return whether this service should use local free-tier safeguards."""
+    return bool(service_data.get(CONF_PROTECT_FREE_TIER, DEFAULT_PROTECT_FREE_TIER))
 
 
 def service_request_body_options(

@@ -299,7 +299,12 @@ Groq documents these response headers:
 
 ### Required Integration Behavior
 
-- Keep the local free-tier guard conservative for built-in Orpheus models.
+- Keep local free-tier safeguards scoped to the configured Groq service that
+  enabled protection.
+- Use Groq rate-limit headers to pause the protected service before repeated
+  requests continue after a limit is exhausted.
+- Keep the additional known-limit free-tier guard conservative for built-in
+  Orpheus models.
 - Count uncached requests only; local cache hits should not consume local guard
   counters because they do not call Groq.
 - Estimate text token usage conservatively from final `input` length.
@@ -359,8 +364,8 @@ payload and should not be sent.
 - Consider adding `sample_rate` and `speed` only if Groq confirms Orpheus support.
 - Keep vocal directions English-model-only in docs and UI help text.
 - Use `GET /models` for discovery but preserve built-in Orpheus fallback values.
-- Preserve current local free-tier protection behavior for Orpheus free-plan
-  limits.
+- Keep free-tier protection scoped to the selected service; protection for one
+  configured Groq service must not block other services.
 - Parse and surface Groq error JSON without logging API keys.
 - Treat non-audio successful responses from `/audio/speech` as invalid for the
   current integration.

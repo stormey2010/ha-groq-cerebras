@@ -319,7 +319,8 @@ def test_tts_entity_properties_use_options_over_data():
     assert entity.default_options["vocal_directions"] == ""
     assert entity.supported_languages == ["ar", "en"]
     assert entity.device_info["model"] == ORPHEUS_ENGLISH_MODEL
-    assert entity.name == ORPHEUS_ENGLISH_MODEL.upper()
+    assert entity.device_info["name"] == ORPHEUS_ENGLISH_MODEL
+    assert entity.name is None
 
 
 class DummyProc:
@@ -421,7 +422,7 @@ async def test_tts_async_setup_entry_builds_engine_with_options():
     assert engine._api_key == "option-key"
     assert engine._url == "option-url"
     assert engine._cache_max == 12
-    assert engine._protect_free_tier is False
+    assert engine._protect_free_tier is True
     assert engine._response_format == "wav"
 
 
@@ -450,6 +451,7 @@ async def test_tts_async_setup_entry_builds_entities_from_subentries():
                 "model": ORPHEUS_ENGLISH_MODEL,
                 "voice": ORPHEUS_ENGLISH_VOICE,
                 "vocal_directions": "warm",
+                "protect_free_tier": False,
             },
         )
     }
@@ -469,8 +471,10 @@ async def test_tts_async_setup_entry_builds_entities_from_subentries():
     assert len(added) == 1
     assert subentry_ids == ["subentry-id"]
     assert added[0].unique_id == "subentry-id"
-    assert added[0].name == "KITCHEN TTS"
+    assert added[0].name is None
+    assert added[0].device_info["name"] == "Kitchen TTS"
     assert added[0]._engine._url == DEFAULT_TTS_URL
+    assert added[0]._engine._protect_free_tier is False
     assert added[0]._engine._model == ORPHEUS_ENGLISH_MODEL
     assert added[0]._engine._voice == ORPHEUS_ENGLISH_VOICE
 
@@ -1027,15 +1031,9 @@ async def test_options_flow_shows_schema_and_saves(monkeypatch):
     assert form["type"] == "form"
     assert form["step_id"] == "init"
 
-    saved = await flow.async_step_init(
-        {
-            "protect_free_tier": False,
-        }
-    )
+    saved = await flow.async_step_init({"api_key": "new-key"})
     assert saved == {
         "type": "create_entry",
         "title": "",
-        "data": {
-            "protect_free_tier": False,
-        },
+        "data": {"api_key": "new-key"},
     }

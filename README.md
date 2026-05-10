@@ -43,7 +43,8 @@ OCR support is present in the service architecture and model registry, but the s
 - Support for Groq Compound models: `groq/compound` and `groq/compound-mini`
 - Structured output support through Groq `json_schema` response formats and Home Assistant AI Task schemas
 - Image analysis response service using Groq vision-capable models
-- Text-to-Speech entities with Orpheus voices, vocal direction presets, custom vocal directions, optional audio normalization, local cache sizing, and free-tier protection
+- Per-service free-tier protection for Text Generation, Speech-to-Text, Text-to-Speech, and Image Recognition services
+- Text-to-Speech entities with Orpheus voices, vocal direction presets, custom vocal directions, optional audio normalization, and local cache sizing
 - Diagnostics with API keys redacted
 
 ## Quick install (HACS)
@@ -102,7 +103,7 @@ Use the generated Conversation entity with Home Assistant Assist, the generated 
 action: groq.generate_text
 data:
   prompt: Summarize the current home status for a dashboard notification.
-  model: llama-3.1-8b-instant
+  model: openai/gpt-oss-20b
   temperature: 0.2
 response_variable: groq_text
 ```
@@ -180,14 +181,21 @@ response_variable: groq_image
 Service setup queries Groq for the active models available to the selected account API key, then filters the list to models that match the service type. Built-in model lists are used only when Groq model discovery is unavailable.
 
 Text Generation:
-- `llama-3.1-8b-instant`
-- `llama-3.3-70b-versatile`
 - `openai/gpt-oss-20b`
 - `openai/gpt-oss-120b`
 - `openai/gpt-oss-safeguard-20b`
+- `meta-llama/llama-4-scout-17b-16e-instruct`
+- `llama-3.1-8b-instant`
+- `llama-3.3-70b-versatile`
 - `qwen/qwen3-32b`
 - `groq/compound`
 - `groq/compound-mini`
+
+Data generation tasks and Structured Outputs:
+- `openai/gpt-oss-20b`
+- `openai/gpt-oss-120b`
+- `openai/gpt-oss-safeguard-20b`
+- `meta-llama/llama-4-scout-17b-16e-instruct`
 
 Reasoning:
 - `openai/gpt-oss-20b`

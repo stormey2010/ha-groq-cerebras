@@ -549,6 +549,9 @@ def test_model_registry_infers_capabilities():
     )
     assert GroqModelRegistry().supports("openai/gpt-oss-20b", GroqFeature.REASONING)
     assert not GroqModelRegistry().supports(
+        "llama-3.1-8b-instant", GroqFeature.STRUCTURED_OUTPUTS
+    )
+    assert not GroqModelRegistry().supports(
         "custom/text-model", GroqFeature.STRUCTURED_OUTPUTS
     )
     assert GroqModelRegistry().supports("qwen/qwen3-32b", GroqFeature.REASONING)
@@ -617,7 +620,7 @@ def test_text_generation_config_flow_rejects_structured_outputs_for_unsupported_
 def test_text_generation_config_flow_accepts_structured_output_models():
     errors = validate_text_generation_input(
         {
-            CONF_MODEL: "llama-3.1-8b-instant",
+            CONF_MODEL: "openai/gpt-oss-20b",
             CONF_STRUCTURED_OUTPUTS: True,
         }
     )
@@ -1221,7 +1224,7 @@ async def test_ai_task_entity_generates_and_validates_structured_data():
     service_data = {
         "unique_id": "task-service",
         "name": "Groq Data Tasks",
-        "model": "llama-3.1-8b-instant",
+        "model": "openai/gpt-oss-20b",
         "system_prompt": DEFAULT_SYSTEM_PROMPT,
     }
     client = DummyTextClient('{"summary": "Garage door is open"}')
@@ -1238,7 +1241,9 @@ async def test_ai_task_entity_generates_and_validates_structured_data():
     assert result.data == {"summary": "Garage door is open"}
     request = client.requests[0]
     assert isinstance(request, StructuredGenerationRequest)
+    assert request.model == "openai/gpt-oss-20b"
     assert request.prompt == "Summarize the current home state"
+    assert request.strict is True
     assert request.schema == {
         "type": "object",
         "properties": {"summary": {"type": "string"}},

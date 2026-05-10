@@ -22,6 +22,7 @@ from .text_generation import (
     service_max_tokens,
     service_model,
     service_name,
+    service_protect_free_tier,
     service_reasoning_effort,
     service_reasoning_format,
     service_request_body_options,
@@ -70,7 +71,8 @@ class GroqConversationEntity(ConversationEntity):
         self._config_entry = config_entry
         self._service_data = service_data
         self._client = client
-        self._attr_name = service_name(config_entry, service_data)
+        self._service_name = service_name(config_entry, service_data)
+        self._attr_name = "Assist"
         self._attr_unique_id = f"{service_unique_id(config_entry, service_data)}_assist"
 
     @property
@@ -87,7 +89,7 @@ class GroqConversationEntity(ConversationEntity):
             },
             "manufacturer": "Groq",
             "model": service_model(self._config_entry, self._service_data),
-            "name": self._attr_name,
+            "name": self._service_name,
         }
 
     async def _async_handle_message(
@@ -120,6 +122,10 @@ class GroqConversationEntity(ConversationEntity):
                 self._config_entry, self._service_data
             ),
             extra_body=service_request_body_options(
+                self._config_entry, self._service_data
+            ),
+            service_id=service_unique_id(self._config_entry, self._service_data),
+            protect_free_tier=service_protect_free_tier(
                 self._config_entry, self._service_data
             ),
         )

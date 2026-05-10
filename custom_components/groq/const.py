@@ -127,16 +127,17 @@ DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
 DEFAULT_TTS_URL = f"{DEFAULT_BASE_URL}/audio/speech"
 
 TEXT_MODELS = [
-    "llama-3.1-8b-instant",
-    "llama-3.3-70b-versatile",
     "openai/gpt-oss-20b",
     "openai/gpt-oss-120b",
     "openai/gpt-oss-safeguard-20b",
+    "meta-llama/llama-4-scout-17b-16e-instruct",
+    "llama-3.1-8b-instant",
+    "llama-3.3-70b-versatile",
     "qwen/qwen3-32b",
     "groq/compound",
     "groq/compound-mini",
 ]
-DEFAULT_TEXT_MODEL = "llama-3.1-8b-instant"
+DEFAULT_TEXT_MODEL = "openai/gpt-oss-20b"
 DEFAULT_TEXT_TEMPERATURE = 0.2
 
 REASONING_MODELS = {
@@ -151,10 +152,10 @@ PROMPT_CACHING_MODELS = {
     "openai/gpt-oss-safeguard-20b",
 }
 STRUCTURED_OUTPUTS_MODELS = {
-    "llama-3.1-8b-instant",
-    "llama-3.3-70b-versatile",
     "openai/gpt-oss-20b",
     "openai/gpt-oss-120b",
+    "openai/gpt-oss-safeguard-20b",
+    "meta-llama/llama-4-scout-17b-16e-instruct",
 }
 COMPOUND_MODELS = {
     "groq/compound",

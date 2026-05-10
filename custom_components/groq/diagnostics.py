@@ -23,9 +23,7 @@ from .const import (
     CONF_VOICE,
     CONF_VOCAL_DIRECTIONS,
     CONF_CACHE_SIZE,
-    CONF_PROTECT_FREE_TIER,
     DEFAULT_CACHE_SIZE,
-    DEFAULT_PROTECT_FREE_TIER,
     DEFAULT_RESPONSE_FORMAT,
     DEFAULT_TTS_URL,
     FEATURE_TEXT_TO_SPEECH,
@@ -56,9 +54,6 @@ def _default_summary(entry: ConfigEntry) -> dict[str, Any]:
             ),
             "normalize_audio": _entry_value(entry, CONF_NORMALIZE_AUDIO, False),
             "cache_size": _entry_value(entry, CONF_CACHE_SIZE, DEFAULT_CACHE_SIZE),
-            "protect_free_tier": _entry_value(
-                entry, CONF_PROTECT_FREE_TIER, DEFAULT_PROTECT_FREE_TIER
-            ),
         }
     }
 

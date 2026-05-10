@@ -19,7 +19,6 @@ from homeassistant.config_entries import (
 )
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.core import callback
-from homeassistant.helpers.selector import selector
 
 from .const import (
     CONF_ADVANCED_OPTIONS,
@@ -27,11 +26,9 @@ from .const import (
     CONF_ENABLED_FEATURES,
     CONF_MODEL,
     CONF_NAME,
-    CONF_PROTECT_FREE_TIER,
     CONF_SERVICE_TYPE,
     CONF_VOICE,
     DEFAULT_MODEL,
-    DEFAULT_PROTECT_FREE_TIER,
     DOMAIN,
     FEATURE_IMAGE_RECOGNITION,
     FEATURE_LABELS,
@@ -59,6 +56,7 @@ from .flow_schemas import (
     speech_to_text_schema,
     text_generation_advanced_schema,
     text_generation_basic_schema,
+    text_generation_model_capability_summary,
     text_to_speech_schema,
     validate_text_generation_input,
     validate_user_input,
@@ -306,28 +304,11 @@ class GroqOptionsFlow(OptionsFlow):
             if not user_input.get(CONF_API_KEY):
                 user_input.pop(CONF_API_KEY, None)
             return self.async_create_entry(title="", data=user_input)
-        try:
-            current_entry = self.config_entry
-        except ValueError:
-            current_options = {}
-            current_data = {}
-        else:
-            current_options = dict(current_entry.options)
-            current_data = dict(current_entry.data)
         options_schema = vol.Schema(
             {
                 vol.Optional(
                     CONF_API_KEY,
                 ): api_key_selector(),
-                vol.Optional(
-                    CONF_PROTECT_FREE_TIER,
-                    default=current_options.get(
-                        CONF_PROTECT_FREE_TIER,
-                        current_data.get(
-                            CONF_PROTECT_FREE_TIER, DEFAULT_PROTECT_FREE_TIER
-                        ),
-                    ),
-                ): selector({"boolean": {}}),
             }
         )
         return self.async_show_form(step_id="init", data_schema=options_schema)
@@ -456,8 +437,15 @@ class GroqServiceSubentryFlow(ConfigSubentryFlow):
                     data_schema=text_generation_basic_schema(
                         user_input,
                         model_options,
+                        model_registry,
                     ),
                     errors=errors,
+                    description_placeholders={
+                        "model_capabilities": text_generation_model_capability_summary(
+                            user_input.get(CONF_MODEL, ""),
+                            model_registry,
+                        )
+                    },
                 )
             if configure_advanced:
                 # The advanced step edits the same service object; merge with
@@ -486,7 +474,19 @@ class GroqServiceSubentryFlow(ConfigSubentryFlow):
             data_schema=text_generation_basic_schema(
                 self._existing_service_data(),
                 model_options,
+                model_registry,
             ),
+            description_placeholders={
+                "model_capabilities": text_generation_model_capability_summary(
+                    (
+                        self._existing_service_data().get(CONF_MODEL)
+                        or model_options[0]
+                        if model_options
+                        else ""
+                    ),
+                    model_registry,
+                )
+            },
         )
 
     async def async_step_text_generation_advanced(

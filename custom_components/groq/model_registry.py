@@ -7,11 +7,7 @@ from enum import StrEnum
 from functools import lru_cache
 from typing import Any, Iterable
 
-from .const import (
-    PROMPT_CACHING_MODELS,
-    REASONING_MODELS,
-    STRUCTURED_OUTPUTS_MODELS,
-)
+from .const import PROMPT_CACHING_MODELS, REASONING_MODELS, STRUCTURED_OUTPUTS_MODELS
 from .feature_registry import GroqFeature
 
 
@@ -53,7 +49,6 @@ class GroqModel:
         }
 
 
-DEFAULT_TEXT_MODEL = "llama-3.1-8b-instant"
 DEFAULT_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 DEFAULT_STRUCTURED_MODEL = "openai/gpt-oss-20b"
 
@@ -65,7 +60,6 @@ BUILT_IN_MODELS: dict[str, GroqModel] = {
         capabilities=frozenset(
             {
                 GroqCapability.TEXT_GENERATION,
-                GroqCapability.STRUCTURED_OUTPUTS,
             }
         ),
     ),
@@ -76,7 +70,6 @@ BUILT_IN_MODELS: dict[str, GroqModel] = {
         capabilities=frozenset(
             {
                 GroqCapability.TEXT_GENERATION,
-                GroqCapability.STRUCTURED_OUTPUTS,
             }
         ),
     ),

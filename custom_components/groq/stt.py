@@ -16,9 +16,11 @@ from .const import (
     CONF_LANGUAGE,
     CONF_MODEL,
     CONF_NAME,
+    CONF_PROTECT_FREE_TIER,
     CONF_SERVICE_TYPE,
     CONF_SUBENTRY_ID,
     DEFAULT_STT_MODEL,
+    DEFAULT_PROTECT_FREE_TIER,
     DOMAIN,
     FEATURE_SPEECH_TO_TEXT,
     STT_LANGUAGES,
@@ -74,7 +76,8 @@ class GroqSTTEntity(stt.SpeechToTextEntity):
         self._config_entry = config_entry
         self._service_data = service_data
         self._client = client
-        self._attr_name = service_data.get(CONF_NAME, "Groq Speech-to-Text")
+        self._service_name = service_data.get(CONF_NAME, "Groq Speech-to-Text")
+        self._attr_name = None
         self._service_unique_id = str(
             service_data.get(UNIQUE_ID)
             or getattr(config_entry, "unique_id", None)
@@ -134,7 +137,7 @@ class GroqSTTEntity(stt.SpeechToTextEntity):
             "identifiers": {(DOMAIN, self._service_unique_id)},
             "manufacturer": "Groq",
             "model": self._service_data.get(CONF_MODEL, DEFAULT_STT_MODEL),
-            "name": self._attr_name,
+            "name": self._service_name,
         }
 
     async def async_process_audio_stream(
@@ -167,6 +170,13 @@ class GroqSTTEntity(stt.SpeechToTextEntity):
                 filename=filename,
                 model=self._service_data.get(CONF_MODEL, DEFAULT_STT_MODEL),
                 language=language,
+                service_id=self._service_data.get(UNIQUE_ID),
+                protect_free_tier=bool(
+                    self._service_data.get(
+                        CONF_PROTECT_FREE_TIER,
+                        DEFAULT_PROTECT_FREE_TIER,
+                    )
+                ),
             )
         except GroqApiError:
             _LOGGER.exception("Error during Groq speech transcription")

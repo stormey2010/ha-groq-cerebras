@@ -18,6 +18,7 @@ from .const import (
     CONF_SUBENTRY_ID,
     CONF_INPUT,
     CONF_MODEL,
+    CONF_NAME,
     CONF_VOICE,
     CONF_VOCAL_DIRECTIONS,
     CONF_URL,
@@ -88,8 +89,7 @@ async def async_setup_entry(
                 DEFAULT_CACHE_SIZE,
                 service_data=service_data,
             ),
-            protect_free_tier=_entry_value(
-                config_entry,
+            protect_free_tier=(service_data or {}).get(
                 CONF_PROTECT_FREE_TIER,
                 DEFAULT_PROTECT_FREE_TIER,
             ),
@@ -133,7 +133,13 @@ class GroqTTSEntity(TextToSpeechEntity):
             self._attr_unique_id = (
                 f"{config.data.get(CONF_URL)}_{config.data.get(CONF_MODEL)}"
             )
-        # Let the registry generate the entity_id based on name/device info
+        self._service_name = _entry_value(
+            config,
+            CONF_NAME,
+            _entry_value(config, CONF_MODEL, "", service_data=self._service_data),
+            service_data=self._service_data,
+        )
+        self._attr_name = None
 
     @property
     def default_language(self) -> str:
@@ -181,14 +187,8 @@ class GroqTTSEntity(TextToSpeechEntity):
                 self._config, CONF_MODEL, service_data=self._service_data
             ),
             "manufacturer": "Groq",
+            "name": self._service_name,
         }
-
-    @property
-    def name(self) -> str:
-        return self._service_data.get(
-            "name",
-            _entry_value(self._config, CONF_MODEL, "", service_data=self._service_data),
-        ).upper()
 
     async def async_get_tts_audio(
         self,

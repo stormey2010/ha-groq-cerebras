@@ -46,12 +46,10 @@
             "init": {
                 "title": "Configure Groq options",
                 "data": {
-                    "api_key": "Groq API key",
-                    "protect_free_tier": "Protect Groq free tier usage"
+                    "api_key": "Groq API key"
                 },
                 "data_description": {
-                    "api_key": "Optional replacement API key for this Groq account.",
-                    "protect_free_tier": "Conservatively blocks local TTS requests before built-in Orpheus free-tier limits are exceeded."
+                    "api_key": "Optional replacement API key for this Groq account."
                 }
             }
         }
@@ -63,22 +61,28 @@
                 "user": "Add Text Generation",
                 "reconfigure": "Reconfigure Text Generation"
             },
+            "abort": {
+                "reconfigure_successful": "Text Generation service updated successfully."
+            },
             "step": {
                 "text_generation": {
                     "title": "Text Generation",
+                    "description": "Selected model capabilities: {model_capabilities}",
                     "data": {
                         "name": "Name",
                         "model": "Model",
                         "system_prompt": "System prompt",
                         "temperature": "Temperature",
-                        "advanced_options": "Configure advanced request options"
+                        "advanced_options": "Configure advanced request options",
+                        "protect_free_tier": "Protect this service's free-tier usage"
                     },
                     "data_description": {
                         "name": "A friendly name for this text generation service. Home Assistant uses this for Assist and AI task entities.",
                         "model": "The Groq chat model used for text responses, Assist conversations, and data generation tasks.",
                         "system_prompt": "Instructions that guide the model. The default matches Home Assistant's AI task prompt.",
                         "temperature": "Controls response variation. Lower values are more predictable; higher values are more creative.",
-                        "advanced_options": "Opens advanced controls for less common Groq chat request options."
+                        "advanced_options": "Opens advanced controls for less common Groq chat request options.",
+                        "protect_free_tier": "Uses per-service safeguards and Groq rate-limit headers to pause this service before known free-tier limits are exceeded. Other Groq services are not affected."
                     }
                 },
                 "text_generation_advanced": {
@@ -126,18 +130,23 @@
                 "user": "Add Speech-to-Text",
                 "reconfigure": "Reconfigure Speech-to-Text"
             },
+            "abort": {
+                "reconfigure_successful": "Speech-to-Text service updated successfully."
+            },
             "step": {
                 "speech_to_text": {
                     "title": "Speech-to-Text",
                     "data": {
                         "name": "Name",
                         "model": "Model",
-                        "language": "Language"
+                        "language": "Language",
+                        "protect_free_tier": "Protect this service's free-tier usage"
                     },
                     "data_description": {
                         "name": "A friendly name for this Speech-to-Text service instance.",
                         "model": "The Groq Whisper model used to transcribe audio.",
-                        "language": "Language hint sent to Groq for transcription. Defaults to the language configured in Home Assistant when available."
+                        "language": "Language hint sent to Groq for transcription. Defaults to the language configured in Home Assistant when available.",
+                        "protect_free_tier": "Uses per-service safeguards and Groq rate-limit headers to pause this service before known free-tier limits are exceeded. Other Groq services are not affected."
                     }
                 }
             }
@@ -148,6 +157,9 @@
                 "user": "Add Text-to-Speech",
                 "reconfigure": "Reconfigure Text-to-Speech"
             },
+            "abort": {
+                "reconfigure_successful": "Text-to-Speech service updated successfully."
+            },
             "step": {
                 "text_to_speech": {
                     "title": "Text-to-Speech",
@@ -156,14 +168,16 @@
                         "model": "Model",
                         "voice": "Voice",
                         "vocal_directions": "Default vocal directions",
-                        "normalize_audio": "Enable loudness for generated audio (uses more CPU)"
+                        "normalize_audio": "Enable loudness for generated audio (uses more CPU)",
+                        "protect_free_tier": "Protect this service's free-tier usage"
                     },
                     "data_description": {
                         "name": "A friendly name for this Text-to-Speech service instance.",
                         "model": "The Groq speech model used to generate audio.",
                         "voice": "The voice persona used by the selected speech model. Changing the model clears voices that are not available for the new model.",
                         "vocal_directions": "Optional delivery style prepended to speech, such as cheerful or whisper. You can choose a preset or type your own.",
-                        "normalize_audio": "Converts output to normalized MP3 with ffmpeg for more consistent loudness on small speakers."
+                        "normalize_audio": "Converts output to normalized MP3 with ffmpeg for more consistent loudness on small speakers.",
+                        "protect_free_tier": "Uses per-service safeguards and Groq rate-limit headers to pause this service before known free-tier limits are exceeded. Other Groq services are not affected."
                     }
                 }
             }
@@ -174,18 +188,23 @@
                 "user": "Add Image Recognition",
                 "reconfigure": "Reconfigure Image Recognition"
             },
+            "abort": {
+                "reconfigure_successful": "Image Recognition service updated successfully."
+            },
             "step": {
                 "image_recognition": {
                     "title": "Image Recognition",
                     "data": {
                         "name": "Name",
                         "model": "Model",
-                        "system_prompt": "System prompt"
+                        "system_prompt": "System prompt",
+                        "protect_free_tier": "Protect this service's free-tier usage"
                     },
                     "data_description": {
                         "name": "A friendly name for this Image Recognition service instance.",
                         "model": "The Groq vision model used to inspect images.",
-                        "system_prompt": "Optional instructions that guide how image questions are answered."
+                        "system_prompt": "Optional instructions that guide how image questions are answered.",
+                        "protect_free_tier": "Uses per-service safeguards and Groq rate-limit headers to pause this service before known free-tier limits are exceeded. Other Groq services are not affected."
                     }
                 }
             }

@@ -2,16 +2,23 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import aiohttp
 import pytest
 import voluptuous as vol
+import yaml
 from homeassistant import data_entry_flow
 from homeassistant.components import stt
+from homeassistant.components.media_source import Unresolvable
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    HomeAssistantError,
+    ServiceValidationError,
+)
 
 import custom_components.groq as integration
 from custom_components.groq import (
@@ -81,10 +88,17 @@ from custom_components.groq.model_registry import (
     model_from_api,
 )
 from custom_components.groq.prompt_cache import GroqPromptCache
-from custom_components.groq.rate_limit import GroqRateLimitInfo, GroqRateLimiter
+from custom_components.groq.rate_limit import (
+    GroqRateLimitInfo,
+    GroqRateLimiter,
+    _duration_seconds,
+    _guard_delay_seconds,
+)
 from custom_components.groq.runtime import async_get_runtime, build_runtime
 from custom_components.groq.services import (
     ATTR_CONFIG_ENTRY_ID,
+    ATTR_IMAGE_FILE,
+    ATTR_IMAGE_PATH,
     ATTR_IMAGE_URL,
     ATTR_PROMPT,
     ATTR_REASONING_EFFORT,
@@ -107,6 +121,11 @@ from custom_components.groq.services import (
     _handle_generate_structured,
     _handle_generate_text,
     _handle_list_models,
+    _image_data_url,
+    _image_from_camera_target,
+    _image_from_local_path,
+    _image_from_media_source,
+    _image_url_from_call,
     _request_options,
     _runtime_from_call,
     _service_from_call,
@@ -269,6 +288,57 @@ class DummyPostSession:
         if isinstance(response, BaseException):
             raise response
         return response
+
+
+def test_services_yaml_guides_action_inputs():
+    """Ensure service action metadata uses constrained selectors where possible."""
+    services = yaml.safe_load(
+        (Path(__file__).parents[3] / "custom_components/groq/services.yaml").read_text()
+    )
+
+    for service_id, service in services.items():
+        assert service["name"] and "_" not in service["name"], service_id
+        assert service["description"], service_id
+        for field_id, field in service["fields"].items():
+            assert field["name"], (service_id, field_id)
+            assert field["description"], (service_id, field_id)
+            assert field["selector"], (service_id, field_id)
+
+    assert services["analyze_image"]["target"]["entity"]["domain"] == "camera"
+    assert services["extract_text_from_image"]["target"]["entity"]["domain"] == "camera"
+
+    for service_id in ("generate_text", "generate_structured"):
+        fields = services[service_id]["fields"]
+        assert fields["config_entry_id"]["selector"] == {
+            "config_entry": {"integration": "groq"}
+        }
+        assert "fixed dropdown" in fields["service_id"]["description"]
+        assert "user-defined" in fields["service_id"]["description"]
+        assert "select" in fields["model"]["selector"]
+        assert fields["model"]["selector"]["select"]["custom_value"] is True
+        assert "newer Groq model ID" in fields["model"]["description"]
+        assert "YAML automations" in fields["stop"]["description"]
+        assert fields["service_tier"]["selector"]["select"]["options"] == [
+            {"label": "Auto", "value": "auto"},
+            {"label": "On Demand", "value": "on_demand"},
+            {"label": "Flex", "value": "flex"},
+            {"label": "Performance", "value": "performance"},
+        ]
+        assert "Free-form" in fields["request_body_options"]["description"]
+        assert fields["request_body_options"]["selector"] == {"object": None}
+
+    for service_id in ("analyze_image", "extract_text_from_image"):
+        fields = services[service_id]["fields"]
+        assert "fixed dropdown" in fields["service_id"]["description"]
+        assert fields["image_file"]["selector"] == {"media": {"accept": ["image/*"]}}
+        assert "allowlist_external_dirs" in fields["image_path"]["description"]
+        assert fields["image_url"]["selector"] == {"text": {"type": "url"}}
+        assert fields["model"]["selector"]["select"]["custom_value"] is True
+
+    assert services["clear_cache"]["fields"]["config_entry_id"]["selector"] == {
+        "config_entry": {"integration": "groq"}
+    }
+    assert services["list_models"]["fields"]["refresh"]["selector"] == {"boolean": None}
 
 
 class DummyClient:
@@ -599,6 +669,35 @@ def test_const_errors_features_cache_and_rate_limit_helpers():
     assert "retry after 1 seconds" in info.error_message()
     with pytest.raises(GroqRateLimitExceeded):
         GroqRateLimiter.raise_for_headers({"retry-after": "1"}, {"error": "rate"})
+    limiter = GroqRateLimiter()
+    limiter.raise_if_blocked(None)
+    limiter.raise_if_blocked("service")
+    limiter.update_from_headers(None, {"retry-after": "1"})
+    limiter.update_from_headers("service", {})
+    limiter.update_from_headers("service", {"retry-after": "2"})
+    with pytest.raises(GroqRateLimitExceeded, match="free-tier guard"):
+        limiter.raise_if_blocked("service")
+    limiter._blocked_until["expired"] = 0
+    limiter.raise_if_blocked("expired")
+    assert "expired" not in limiter._blocked_until
+    assert _guard_delay_seconds(GroqRateLimitInfo(retry_after="1.5")) == 2
+    assert (
+        _guard_delay_seconds(
+            GroqRateLimitInfo(
+                remaining_requests="0",
+                reset_requests="2m",
+                reset_tokens="1s",
+            )
+        )
+        == 120
+    )
+    assert _guard_delay_seconds(GroqRateLimitInfo(remaining_tokens="0")) == 60
+    assert _guard_delay_seconds(GroqRateLimitInfo(remaining_requests="1")) is None
+    assert _duration_seconds(None) is None
+    assert _duration_seconds("250ms") == 1
+    assert _duration_seconds("2h") == 7200
+    assert _duration_seconds("bad") is None
+    assert _duration_seconds("badms") is None
 
 
 @pytest.mark.asyncio
@@ -745,7 +844,7 @@ def test_flow_schema_and_text_generation_helpers_cover_branches():
     assert entry_value(entry, {}, "missing", "fallback") == "fallback"
     assert text_generation_module.text_generation_service_data(entry) == []
     assert text_generation_module.service_name(entry, {}) == "Groq"
-    assert text_generation_module.service_model(entry, {}) == "llama-3.1-8b-instant"
+    assert text_generation_module.service_model(entry, {}) == "openai/gpt-oss-20b"
     assert text_generation_module.service_system_prompt(entry, {"system_prompt": ""})
     assert text_generation_module.service_temperature(entry, service_data) is None
     assert text_generation_module.service_max_tokens(entry, service_data) is None
@@ -1420,6 +1519,163 @@ async def test_services_handlers_and_registration_cover_remaining_paths():
 
 
 @pytest.mark.asyncio
+async def test_image_source_resolution_paths(tmp_path, monkeypatch):
+    """Cover camera, media-source, local-path, and fallback image inputs."""
+
+    class ImageHass(DummyHass):
+        def __init__(self, *, allowed: bool = True):
+            super().__init__()
+            self.config = SimpleNamespace(is_allowed_path=lambda _path: allowed)
+
+        async def async_add_executor_job(self, func, *args):
+            return func(*args)
+
+    hass = ImageHass()
+    image_path = tmp_path / "snapshot.jpg"
+    image_path.write_bytes(b"image")
+    text_path = tmp_path / "not-image.txt"
+    text_path.write_text("not image")
+
+    assert _image_data_url(b"abc", None) == "data:image/jpeg;base64,YWJj"
+    assert await _image_from_camera_target(hass, service_call({})) is None
+    assert (
+        await _image_from_camera_target(
+            hass, service_call({"entity_id": "light.kitchen"})
+        )
+        is None
+    )
+    with pytest.raises(ServiceValidationError, match="only one camera"):
+        await _image_from_camera_target(
+            hass,
+            service_call({"entity_id": ["camera.front", "camera.back"]}),
+        )
+
+    async def fake_camera_image(_hass, _entity_id):
+        return SimpleNamespace(content=b"camera", content_type="image/png")
+
+    monkeypatch.setattr(
+        "custom_components.groq.services.camera.async_get_image",
+        fake_camera_image,
+    )
+    assert (
+        await _image_from_camera_target(
+            hass, service_call({"entity_id": "camera.front"})
+        )
+        == "data:image/png;base64,Y2FtZXJh"
+    )
+
+    async def fake_target_entities(_call):
+        return {"camera.area"}
+
+    monkeypatch.setattr(
+        "custom_components.groq.services.service_helper.async_extract_entity_ids",
+        fake_target_entities,
+    )
+    assert (
+        await _image_from_camera_target(hass, service_call({"area_id": "front_yard"}))
+        == "data:image/png;base64,Y2FtZXJh"
+    )
+
+    async def failing_camera_image(_hass, _entity_id):
+        raise RuntimeError("camera unavailable")
+
+    monkeypatch.setattr(
+        "custom_components.groq.services.camera.async_get_image",
+        failing_camera_image,
+    )
+    with pytest.raises(ServiceValidationError, match="Could not capture"):
+        await _image_from_camera_target(hass, service_call({"entity_id": "camera.bad"}))
+
+    assert await _image_from_local_path(hass, str(image_path)) == (
+        "data:image/jpeg;base64,aW1hZ2U="
+    )
+    with pytest.raises(ServiceValidationError, match="allowlist"):
+        await _image_from_local_path(ImageHass(allowed=False), str(image_path))
+    with pytest.raises(ServiceValidationError, match="not found"):
+        await _image_from_local_path(hass, str(tmp_path / "missing.jpg"))
+    with pytest.raises(ServiceValidationError, match="not an image"):
+        await _image_from_local_path(hass, str(text_path))
+
+    assert await _image_from_media_source(hass, str(image_path)) == (
+        "data:image/jpeg;base64,aW1hZ2U="
+    )
+
+    async def fake_media_path(_hass, _media_id, _target):
+        return SimpleNamespace(path=image_path, mime_type="image/jpeg", url="unused")
+
+    monkeypatch.setattr(
+        "custom_components.groq.services.async_resolve_media",
+        fake_media_path,
+    )
+    assert await _image_from_media_source(
+        hass, "media-source://media/snapshot.jpg"
+    ) == ("data:image/jpeg;base64,aW1hZ2U=")
+
+    async def fake_media_url(_hass, _media_id, _target):
+        return SimpleNamespace(path=None, mime_type="image/png", url="https://image")
+
+    monkeypatch.setattr(
+        "custom_components.groq.services.async_resolve_media",
+        fake_media_url,
+    )
+    assert (
+        await _image_from_media_source(hass, "media-source://media/remote.png")
+        == "https://image"
+    )
+
+    async def fake_unresolvable_media(_hass, _media_id, _target):
+        raise Unresolvable("missing")
+
+    monkeypatch.setattr(
+        "custom_components.groq.services.async_resolve_media",
+        fake_unresolvable_media,
+    )
+    with pytest.raises(ServiceValidationError, match="Could not resolve"):
+        await _image_from_media_source(hass, "media-source://media/missing.jpg")
+
+    async def fake_non_image_media(_hass, _media_id, _target):
+        return SimpleNamespace(path=None, mime_type="text/plain", url="https://text")
+
+    monkeypatch.setattr(
+        "custom_components.groq.services.async_resolve_media",
+        fake_non_image_media,
+    )
+    with pytest.raises(ServiceValidationError, match="not an image"):
+        await _image_from_media_source(hass, "media-source://media/file.txt")
+
+    monkeypatch.setattr(
+        "custom_components.groq.services.camera.async_get_image",
+        fake_camera_image,
+    )
+    assert (
+        await _image_url_from_call(
+            hass, service_call({"entity_id": "camera.front", ATTR_IMAGE_URL: "url"})
+        )
+        == "data:image/png;base64,Y2FtZXJh"
+    )
+    assert (
+        await _image_url_from_call(
+            hass, service_call({ATTR_IMAGE_FILE: str(image_path)})
+        )
+        == "data:image/jpeg;base64,aW1hZ2U="
+    )
+    assert (
+        await _image_url_from_call(
+            hass, service_call({ATTR_IMAGE_PATH: str(image_path)})
+        )
+        == "data:image/jpeg;base64,aW1hZ2U="
+    )
+    assert (
+        await _image_url_from_call(
+            hass, service_call({ATTR_IMAGE_URL: "https://example/image.jpg"})
+        )
+        == "https://example/image.jpg"
+    )
+    with pytest.raises(ServiceValidationError, match="Select a camera"):
+        await _image_url_from_call(hass, service_call({}))
+
+
+@pytest.mark.asyncio
 async def test_stt_setup_properties_wav_error_and_empty_results():
     entry = DummyEntry()
     entry.subentries = {
@@ -1450,6 +1706,8 @@ async def test_stt_setup_properties_wav_error_and_empty_results():
     assert stt.AudioSampleRates.SAMPLERATE_16000 in entity.supported_sample_rates
     assert stt.AudioChannels.CHANNEL_MONO in entity.supported_channels
     assert entity.device_info["model"] == "whisper-large-v3"
+    assert entity.device_info["name"] == "Groq Speech-to-Text"
+    assert entity.name is None
 
     async def stream():
         yield b"\x00\x00"
@@ -1517,13 +1775,14 @@ async def test_ai_task_helpers_and_fallback_paths():
     service_data = {
         "unique_id": "ai-id",
         "name": "AI",
-        "model": "llama-3.1-8b-instant",
+        "model": "openai/gpt-oss-20b",
         "structured_outputs": True,
         "schema": {"type": "object"},
     }
     client = DummyClient()
     entity = GroqAITaskEntity(DummyHass(), entry, service_data, client)
     assert entity.device_info["name"] == "AI"
+    assert entity.name == "Data generation tasks"
     task = SimpleNamespace(
         name="task",
         instructions="Return data",
@@ -1568,10 +1827,44 @@ async def test_ai_task_helpers_and_fallback_paths():
     bad_structured = DummyClient()
     bad_structured.structured = {"text": "{}", "data": {}, "cached": False}
     bad_entity = GroqAITaskEntity(
-        DummyHass(), entry, {"model": "llama-3.1-8b-instant"}, bad_structured
+        DummyHass(), entry, {"model": "openai/gpt-oss-20b"}, bad_structured
     )
     with pytest.raises(HomeAssistantError):
         await bad_entity._async_generate_data(
+            task, SimpleNamespace(conversation_id="c")
+        )
+
+    class FailingStructuredClient(DummyClient):
+        async def async_generate_structured(self, request):
+            self.requests.append(request)
+            raise GroqApiError(
+                "Failed to validate JSON",
+                status=400,
+                payload={"failed_generation": "{}"},
+            )
+
+    retry_client = FailingStructuredClient()
+    retry_client.text = '{"name":"Fallback"}'
+    retry_entity = GroqAITaskEntity(
+        DummyHass(), entry, {"model": "openai/gpt-oss-20b"}, retry_client
+    )
+    result = await retry_entity._async_generate_data(
+        task, SimpleNamespace(conversation_id="c")
+    )
+    assert result.data == {"name": "Fallback"}
+    assert isinstance(retry_client.requests[0], StructuredGenerationRequest)
+    assert isinstance(retry_client.requests[1], TextGenerationRequest)
+
+    class FatalStructuredClient(DummyClient):
+        async def async_generate_structured(self, request):
+            self.requests.append(request)
+            raise GroqApiError("server error", status=500)
+
+    fatal_entity = GroqAITaskEntity(
+        DummyHass(), entry, {"model": "openai/gpt-oss-20b"}, FatalStructuredClient()
+    )
+    with pytest.raises(GroqApiError):
+        await fatal_entity._async_generate_data(
             task, SimpleNamespace(conversation_id="c")
         )
 
@@ -1625,6 +1918,7 @@ async def test_ai_task_and_conversation_setup_properties():
     entity = conversation_entities[0]
     assert entity.supported_languages == "*"
     assert entity.device_info["name"] == "Assistant"
+    assert entity.name == "Assist"
 
 
 @pytest.mark.asyncio
@@ -1647,7 +1941,8 @@ async def test_tts_entity_and_engine_remaining_paths(monkeypatch):
     assert entity.default_language == "en"
     assert entity.supported_languages == ["en"]
     assert entity.device_info["identifiers"] == {("groq", "tts-id")}
-    assert entity.name == "TTS"
+    assert entity.device_info["name"] == "tts"
+    assert entity.name is None
     fmt, audio = await entity.async_get_tts_audio(
         "hello",
         "en",

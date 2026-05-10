@@ -49,6 +49,8 @@ class TextGenerationRequest:
     stream: bool = False
     extra_body: dict[str, Any] | None = None
     api_key: str | None = None
+    service_id: str | None = None
+    protect_free_tier: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,11 +245,13 @@ class GroqApiClient:
         api_key: str | None,
         base_url: str | None = None,
         session: aiohttp.ClientSession | None = None,
+        rate_limiter: GroqRateLimiter | None = None,
     ) -> None:
         self._hass = hass
         self._api_key = api_key
         self._base_url = normalize_base_url(base_url)
         self._session = session
+        self._rate_limiter = rate_limiter or GroqRateLimiter()
 
     @property
     def base_url(self) -> str:
@@ -272,6 +276,7 @@ class GroqApiClient:
             CHAT_COMPLETIONS_PATH,
             json_payload=build_text_generation_payload(request),
             api_key=request.api_key,
+            guard_key=self._guard_key(request),
         )
         return self._chat_result(payload)
 
@@ -287,6 +292,7 @@ class GroqApiClient:
             CHAT_COMPLETIONS_PATH,
             json_payload=payload,
             api_key=request.api_key,
+            guard_key=self._guard_key(request),
         ):
             choices = event.get("choices")
             if not isinstance(choices, list) or not choices:
@@ -313,6 +319,7 @@ class GroqApiClient:
             CHAT_COMPLETIONS_PATH,
             json_payload=build_structured_generation_payload(request),
             api_key=request.api_key,
+            guard_key=self._guard_key(request),
         )
         result = self._chat_result(payload)
         try:
@@ -339,6 +346,7 @@ class GroqApiClient:
             CHAT_COMPLETIONS_PATH,
             json_payload=build_vision_payload(request),
             api_key=request.api_key,
+            guard_key=self._guard_key(request),
         )
         return self._chat_result(payload)
 
@@ -351,6 +359,8 @@ class GroqApiClient:
         language: str | None = None,
         prompt: str | None = None,
         api_key: str | None = None,
+        service_id: str | None = None,
+        protect_free_tier: bool = True,
     ) -> str:
         """Transcribe audio with Groq's OpenAI-compatible audio endpoint."""
         form = aiohttp.FormData()
@@ -367,6 +377,7 @@ class GroqApiClient:
             data=form,
             api_key=api_key,
             content_type=None,
+            guard_key=service_id if protect_free_tier else None,
         )
         text = payload.get("text")
         if not isinstance(text, str):
@@ -400,10 +411,12 @@ class GroqApiClient:
         data: Any = None,
         api_key: str | None = None,
         content_type: str | None = "application/json",
+        guard_key: str | None = None,
     ) -> dict[str, Any]:
         """Perform a JSON request and return a JSON object."""
         session = self._session or async_get_clientsession(self._hass)
         headers = self._headers(api_key, content_type=content_type)
+        self._rate_limiter.raise_if_blocked(guard_key)
         request_kwargs: dict[str, Any] = {
             "headers": headers,
             "timeout": JSON_REQUEST_TIMEOUT,
@@ -421,6 +434,7 @@ class GroqApiClient:
             ) as response:
                 body = await response.read()
                 payload = self._decode_json(body)
+                self._rate_limiter.update_from_headers(guard_key, response.headers)
                 if response.status == 429:
                     GroqRateLimiter.raise_for_headers(response.headers, payload)
                 if response.status in (401, 403):
@@ -444,9 +458,11 @@ class GroqApiClient:
         *,
         json_payload: dict[str, Any],
         api_key: str | None = None,
+        guard_key: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Perform an SSE request and yield decoded JSON events."""
         session = self._session or async_get_clientsession(self._hass)
+        self._rate_limiter.raise_if_blocked(guard_key)
         try:
             async with session.request(
                 method,
@@ -455,6 +471,7 @@ class GroqApiClient:
                 headers=self._headers(api_key),
                 timeout=STREAM_REQUEST_TIMEOUT,
             ) as response:
+                self._rate_limiter.update_from_headers(guard_key, response.headers)
                 if response.status in (401, 403):
                     raise ConfigEntryAuthFailed("Authentication failed for Groq API")
                 if response.status < 200 or response.status >= 300:
@@ -508,6 +525,11 @@ class GroqApiClient:
     def _url(self, path: str) -> str:
         """Return an absolute endpoint URL for a path."""
         return urljoin(f"{self._base_url.rstrip('/')}/", path.lstrip("/"))
+
+    @staticmethod
+    def _guard_key(request: TextGenerationRequest) -> str | None:
+        """Return the per-service guard key for a request when protection is enabled."""
+        return request.service_id if request.protect_free_tier else None
 
     @staticmethod
     def _decode_json(body: bytes) -> dict[str, Any] | list[Any]:

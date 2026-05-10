@@ -123,15 +123,17 @@ def build_runtime(hass: HomeAssistant, entry: ConfigEntry) -> GroqRuntimeData:
                 ):
                     enabled_features.add(GroqFeature.REASONING)
 
+    rate_limiter = GroqRateLimiter()
     return GroqRuntimeData(
         client=GroqApiClient(
             hass,
             api_key=entry_value(entry, CONF_API_KEY),
             base_url=base_url,
+            rate_limiter=rate_limiter,
         ),
         model_registry=GroqModelRegistry(),
         feature_registry=GroqFeatureRegistry(enabled_features),
-        rate_limiter=GroqRateLimiter(),
+        rate_limiter=rate_limiter,
         prompt_cache=GroqPromptCache(max_size=cache_size, default_ttl=cache_ttl),
         services_by_type=services_by_type,
     )
