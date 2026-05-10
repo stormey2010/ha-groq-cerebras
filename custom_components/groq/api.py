@@ -319,7 +319,9 @@ class GroqApiClient:
         if not models:
             return []
         semaphore = asyncio.Semaphore(MODEL_DETAIL_CONCURRENCY)
-        raw_models = raw_models if raw_models is not None else [None for _model in models]
+        raw_models = (
+            raw_models if raw_models is not None else [None for _model in models]
+        )
 
         async def hydrate(
             model: GroqModel,
@@ -330,7 +332,10 @@ class GroqApiClient:
 
         return list(
             await asyncio.gather(
-                *(hydrate(model, raw_model) for model, raw_model in zip(models, raw_models))
+                *(
+                    hydrate(model, raw_model)
+                    for model, raw_model in zip(models, raw_models)
+                )
             )
         )
 

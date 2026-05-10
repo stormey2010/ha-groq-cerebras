@@ -239,7 +239,7 @@ class GroqAITaskEntity(AITaskEntity):
                 "Return only a valid JSON object matching this output structure. "
                 "Do not include Markdown, explanations, or extra keys.\n"
                 f"{_structure_description(task.structure)}"
-        )
+            )
         request = self._text_generation_request(instructions)
         if error := request_body_options_error_message(
             self._model_registry,

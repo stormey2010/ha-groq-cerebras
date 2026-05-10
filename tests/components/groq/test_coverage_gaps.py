@@ -1130,10 +1130,11 @@ async def test_config_flow_dynamic_model_and_locale_fallback_branches(monkeypatc
     async def client_error_models(_hass, _api_key):
         raise aiohttp.ClientError("network down")
 
-    monkeypatch.setattr(config_flow, "async_fetch_available_models", client_error_models)
+    monkeypatch.setattr(
+        config_flow, "async_fetch_available_models", client_error_models
+    )
     assert (
-        await config_flow.async_validate_api_key(DummyHass(), "key")
-        == "cannot_connect"
+        await config_flow.async_validate_api_key(DummyHass(), "key") == "cannot_connect"
     )
 
     assert voice_options_for_model(None)
@@ -1254,13 +1255,16 @@ def test_flow_schema_and_text_generation_helpers_cover_branches():
         )
         or ""
     )
-    assert validate_text_generation_input(
-        {
-            "model": "llama-3.1-8b-instant",
-            "request_body_options": {"response_format": {"type": "text"}},
-        },
-        registry,
-    ) == {}
+    assert (
+        validate_text_generation_input(
+            {
+                "model": "llama-3.1-8b-instant",
+                "request_body_options": {"response_format": {"type": "text"}},
+            },
+            registry,
+        )
+        == {}
+    )
     assert (
         text_generation_module.request_body_options_validation_error(
             registry,
@@ -1321,10 +1325,13 @@ def test_flow_schema_and_text_generation_helpers_cover_branches():
         "strict",
     ):
         assert key not in sanitized
-    assert sanitize_text_generation_service_data(
-        {"model": "unknown-model", "max_tokens": 10},
-        registry,
-    )["max_tokens"] == 10
+    assert (
+        sanitize_text_generation_service_data(
+            {"model": "unknown-model", "max_tokens": 10},
+            registry,
+        )["max_tokens"]
+        == 10
+    )
     invalid_tokens = sanitize_text_generation_service_data(
         {"model": "groq/compound", "max_tokens": "not-a-number"},
         registry,

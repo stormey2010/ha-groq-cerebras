@@ -204,7 +204,12 @@ def sanitize_text_generation_service_data(
         model,
         GroqFeature.STRUCTURED_OUTPUTS,
     ):
-        for key in (CONF_STRUCTURED_OUTPUTS, CONF_SCHEMA, CONF_SCHEMA_NAME, CONF_STRICT):
+        for key in (
+            CONF_STRUCTURED_OUTPUTS,
+            CONF_SCHEMA,
+            CONF_SCHEMA_NAME,
+            CONF_STRICT,
+        ):
             data.pop(key, None)
         if isinstance(request_body_options, dict) and (
             _response_format_requests_structured_outputs(

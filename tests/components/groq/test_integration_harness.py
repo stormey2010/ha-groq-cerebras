@@ -1163,9 +1163,7 @@ async def test_options_flow_shows_schema_and_saves(monkeypatch):
         async_add_executor_job=async_add_executor_job,
         config_entries=SimpleNamespace(
             async_get_known_entry=lambda entry_id: entry,
-            async_update_entry=lambda entry, **kwargs: updated.append(
-                (entry, kwargs)
-            ),
+            async_update_entry=lambda entry, **kwargs: updated.append((entry, kwargs)),
         ),
     )
     _patch_flow_common(monkeypatch, flow, flow.hass)
