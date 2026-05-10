@@ -6,6 +6,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant
+import homeassistant.helpers.config_validation as cv
 
 from .const import DOMAIN, UNIQUE_ID
 from .runtime import (
@@ -19,6 +20,8 @@ from .services import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.empty_config_schema(DOMAIN)
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
