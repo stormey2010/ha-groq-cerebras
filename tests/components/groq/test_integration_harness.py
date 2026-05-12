@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -106,10 +105,8 @@ class DummyEngine:
         return ["ar", "en"]
 
 
-def test_unique_id_from_api_key_uses_sha256_fingerprint():
-    assert config_flow._unique_id_from_api_key("api-key") == (
-        f"groq_{hashlib.sha256(b'api-key').hexdigest()}"
-    )
+def test_new_account_unique_id_uses_groq_prefix():
+    assert config_flow._new_account_unique_id().startswith("groq_")
 
 
 @pytest.mark.asyncio
@@ -1117,7 +1114,7 @@ async def test_config_flow_reauth_confirm(monkeypatch):
     assert result["entry"] is reauth_entry
     assert result["data"]["api_key"] == "new"
     assert result["options"] == {}
-    assert result["unique_id"].startswith("groq_")
+    assert result["unique_id"] == reauth_entry.unique_id
 
     async def invalid_api_key(_hass, _api_key):
         return "invalid_auth"
@@ -1128,11 +1125,10 @@ async def test_config_flow_reauth_confirm(monkeypatch):
     assert invalid["errors"] == {"api_key": "invalid_auth"}
 
     duplicate_key = "duplicate"
-    duplicate_unique_id = config_flow._unique_id_from_api_key(duplicate_key)
     other_entry = DummyConfigEntry(
         {"api_key": duplicate_key},
         {},
-        unique_id=duplicate_unique_id,
+        unique_id="other",
     )
     other_entry.entry_id = "other-entry"
 
@@ -1178,12 +1174,12 @@ async def test_config_flow_reconfigure_updates_account(monkeypatch):
     assert result["data"]["name"] == "Production Groq"
     assert result["data"]["api_key"] == "new-key"
     assert result["options"] == {}
-    assert result["unique_id"] == config_flow._unique_id_from_api_key("new-key")
+    assert result["unique_id"] == entry.unique_id
     assert result["reason"] == "reconfigure_successful"
 
     other = DummyConfigEntry({"api_key": "duplicate"}, {})
     other.entry_id = "other-entry"
-    other.unique_id = config_flow._unique_id_from_api_key("duplicate")
+    other.unique_id = "other"
 
     class DuplicateConfigEntries(DummyConfigEntries):
         def async_entries(self, _domain):
@@ -1235,7 +1231,7 @@ async def test_options_flow_shows_schema_and_saves(monkeypatch):
     assert updated[0][0] is entry
     assert updated[0][1]["data"]["api_key"] == "new-key"
     assert updated[0][1]["options"] == {}
-    assert updated[0][1]["unique_id"].startswith("groq_")
+    assert updated[0][1]["unique_id"] == entry.unique_id
 
     async def cannot_connect(_hass, _api_key):
         return "cannot_connect"
@@ -1249,12 +1245,11 @@ async def test_options_flow_shows_schema_and_saves(monkeypatch):
 @pytest.mark.asyncio
 async def test_options_flow_rejects_duplicate_api_key(monkeypatch):
     duplicate_key = "duplicate"
-    duplicate_unique_id = config_flow._unique_id_from_api_key(duplicate_key)
     current_entry = DummyConfigEntry({"api_key": "current"}, {}, unique_id="current")
     other_entry = DummyConfigEntry(
         {"api_key": duplicate_key},
         {},
-        unique_id=duplicate_unique_id,
+        unique_id="other",
     )
     other_entry.entry_id = "other-entry"
 

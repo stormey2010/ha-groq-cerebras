@@ -8,7 +8,6 @@ import aiohttp
 import voluptuous as vol
 import logging
 import uuid
-import hashlib
 
 from homeassistant import data_entry_flow
 from homeassistant.config_entries import (
@@ -78,10 +77,19 @@ def generate_entry_id() -> str:
     return str(uuid.uuid4())
 
 
-def _unique_id_from_api_key(api_key: str) -> str:
-    """Return the stable account unique id derived from a Groq API key."""
-    uid_hash = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
-    return f"groq_{uid_hash}"
+def _new_account_unique_id() -> str:
+    """Return a new stable Groq account unique id."""
+    return f"groq_{generate_entry_id()}"
+
+
+def _entry_unique_id(entry) -> str:
+    """Return an existing entry unique id, falling back to a new account id."""
+    data = getattr(entry, "data", {}) or {}
+    return (
+        getattr(entry, "unique_id", None)
+        or data.get(UNIQUE_ID)
+        or _new_account_unique_id()
+    )
 
 
 def _api_key_validation_errors(validation_error: str | None) -> dict[str, str]:
@@ -100,7 +108,6 @@ def _api_key_duplicate_error(
     current_entry_id: str | None = None,
 ) -> str | None:
     """Return an error when another Groq entry already uses an API key."""
-    unique_id = _unique_id_from_api_key(api_key)
     config_entries = getattr(hass, "config_entries", None)
     async_entries = getattr(config_entries, "async_entries", None)
     if async_entries is None:
@@ -108,8 +115,6 @@ def _api_key_duplicate_error(
     for entry in async_entries(DOMAIN):
         if getattr(entry, "entry_id", None) == current_entry_id:
             continue
-        if getattr(entry, "unique_id", None) == unique_id:
-            return "duplicate_api_key"
         data = getattr(entry, "data", {}) or {}
         options = getattr(entry, "options", {}) or {}
         if api_key in (data.get(CONF_API_KEY), options.get(CONF_API_KEY)):
@@ -245,8 +250,7 @@ class GroqConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
             try:
                 await validate_user_input(user_input)
                 entry_data = entry_defaults(user_input)
-                # Create a deterministic unique_id from the API key to avoid duplicate account entries.
-                unique_id = _unique_id_from_api_key(entry_data[CONF_API_KEY])
+                unique_id = _new_account_unique_id()
                 await self.async_set_unique_id(unique_id)
                 # Allow multiple named Groq accounts, but do not create a
                 # duplicate account for the same API key.
@@ -302,7 +306,7 @@ class GroqConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
             api_key = user_input.get(CONF_API_KEY)
             new_data = dict(entry.data)
             new_options = dict(entry.options)
-            unique_id = entry.unique_id
+            unique_id = _entry_unique_id(entry)
 
             if api_key:
                 validation_error = await async_validate_api_key(self.hass, api_key)
@@ -318,7 +322,6 @@ class GroqConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
                 if not errors:
                     new_data[CONF_API_KEY] = api_key
                     new_options.pop(CONF_API_KEY, None)
-                    unique_id = _unique_id_from_api_key(api_key)
 
             if not errors:
                 new_data[CONF_NAME] = new_name
@@ -402,7 +405,7 @@ class GroqConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
                     new_data[CONF_API_KEY] = api_key
                     new_options = dict(reauth_entry.options)
                     new_options.pop(CONF_API_KEY, None)
-                    unique_id = _unique_id_from_api_key(api_key)
+                    unique_id = _entry_unique_id(reauth_entry)
                     # Abort current flow, update & reload the entry with new credentials
                     return self.async_update_reload_and_abort(
                         reauth_entry,
@@ -477,7 +480,7 @@ class GroqOptionsFlow(OptionsFlow):
                         current_entry,
                         data=new_data,
                         options=new_options,
-                        unique_id=_unique_id_from_api_key(user_input[CONF_API_KEY]),
+                        unique_id=_entry_unique_id(current_entry),
                     )
                     user_input = new_options
                 return self.async_create_entry(title="", data=user_input)

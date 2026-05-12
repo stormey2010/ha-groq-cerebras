@@ -2025,7 +2025,7 @@ async def test_config_flow_remaining_paths(monkeypatch):
     )
     updated = await flow.async_step_reauth_confirm({CONF_API_KEY: "updated"})
     assert updated["data"][CONF_API_KEY] == "updated"
-    assert updated["unique_id"].startswith("groq_")
+    assert updated["unique_id"] == reauth_entry.unique_id
 
     options_flow = config_flow.GroqOptionsFlow()
     monkeypatch.setattr(
