@@ -1,12 +1,12 @@
 name: Bug report
-description: Report a problem with the Groq Home Assistant integration.
+description: Report a problem with the Groq and Cerebras Home Assistant integration.
 title: "[Bug]: "
 labels: ["bug", "status/needs-triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting a problem. Do not include Groq API keys, full unredacted prompts, or private audio/image content.
+        Thanks for reporting a problem. Do not include Groq or Cerebras API keys, full unredacted prompts, or private audio/image content.
   - type: dropdown
     id: primary_area
     attributes:
@@ -18,7 +18,7 @@ body:
         - Image analysis or vision actions
         - Speech-to-text transcription
         - Text-to-speech or voice selection
-        - Groq API, model access, or rate limits
+        - Groq or Cerebras API, model access, or rate limits
         - Audio processing or ffmpeg normalization
         - Diagnostics or repair issues
         - Documentation
@@ -48,7 +48,7 @@ body:
   - type: input
     id: integration_version
     attributes:
-      label: Groq integration version
+      label: Groq and Cerebras integration version
       description: Use the HACS version, release tag, or manifest version.
       placeholder: "1.0"
     validations:

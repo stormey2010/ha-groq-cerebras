@@ -37,9 +37,9 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          zip -r "groq-${RELEASE_TAG}.zip" custom_components/groq \
+          zip -r "groq-and-cerebras-${RELEASE_TAG}.zip" custom_components/groq \
             -x "*/__pycache__/*" "*/.mypy_cache/*" "*/.pytest_cache/*"
       - name: Upload release asset
         uses: softprops/action-gh-release@v3
         with:
-          files: groq-${{ github.ref_name }}.zip
+          files: groq-and-cerebras-${{ github.ref_name }}.zip

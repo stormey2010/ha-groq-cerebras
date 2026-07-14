@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Added optional simple Assist tools for weather, Exa search, Home Assistant, OpenSky flights, Apple Calendar, Google Workspace, Spotify, and OpenRouteService, with credential-gated exposure and diagnostics redaction.
 
 ### Improvements
+- Rebranded HACS, repository, installation, support, and release metadata as Groq and Cerebras while preserving the `groq` integration domain for existing installations.
 - Kept Groq speech and image services isolated from Cerebras accounts while preserving existing Groq account behavior.
 - Added provider-aware API-key validation, model discovery, request routing, translations, documentation, and regression coverage.
 - Bumped the integration manifest version to `1.4.0`.

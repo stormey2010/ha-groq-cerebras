@@ -1,4 +1,4 @@
-# Contributing to Groq
+# Contributing to Groq and Cerebras
 
 Thanks for helping improve this Home Assistant custom integration. We follow Home Assistant and HACS standards to keep the project healthy and dependable. Please read through this guide before opening a pull request.
 

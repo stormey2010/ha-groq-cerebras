@@ -6,3 +6,9 @@ contact_links:
   - name: Groq status page
     url: https://groqstatus.com/
     about: Check for Groq service incidents before reporting connectivity or API availability problems.
+  - name: Cerebras API documentation
+    url: https://inference-docs.cerebras.ai/
+    about: Check Cerebras model, API, and rate-limit behavior.
+  - name: Cerebras status page
+    url: https://status.cerebras.ai/
+    about: Check for Cerebras service incidents before reporting connectivity problems.

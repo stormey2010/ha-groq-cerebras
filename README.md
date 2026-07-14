@@ -1,16 +1,16 @@
 # Groq and Cerebras - Home Assistant Custom Integration
 
-[![Release](https://img.shields.io/github/v/release/barneyonline/ha-groq?display_name=tag&sort=semver)](https://github.com/barneyonline/ha-groq/releases)
-[![Stars](https://img.shields.io/github/stars/barneyonline/ha-groq)](https://github.com/barneyonline/ha-groq/stargazers)
-[![License](https://img.shields.io/github/license/barneyonline/ha-groq)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/stormey2010/ha-groq-cerebras?display_name=tag&sort=semver)](https://github.com/stormey2010/ha-groq-cerebras/releases)
+[![Stars](https://img.shields.io/github/stars/stormey2010/ha-groq-cerebras)](https://github.com/stormey2010/ha-groq-cerebras/stargazers)
+[![License](https://img.shields.io/github/license/stormey2010/ha-groq-cerebras)](LICENSE)
 
-[![Tests](https://img.shields.io/github/actions/workflow/status/barneyonline/ha-groq/ci.yml?branch=main&label=tests)](https://github.com/barneyonline/ha-groq/actions/workflows/ci.yml)
-[![Codecov](https://codecov.io/gh/barneyonline/ha-groq/branch/main/graph/badge.svg)](https://codecov.io/gh/barneyonline/ha-groq)
-[![Hassfest](https://img.shields.io/github/actions/workflow/status/barneyonline/ha-groq/hassfest.yml?branch=main&label=hassfest)](https://github.com/barneyonline/ha-groq/actions/workflows/hassfest.yml)
-[![Quality Scale](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fbarneyonline%2Fha-groq%2Fmain%2Fcustom_components%2Fgroq%2Fmanifest.json&query=%24.quality_scale&label=quality%20scale&cacheSeconds=3600)](https://developers.home-assistant.io/docs/integration_quality_scale_index)
+[![Tests](https://img.shields.io/github/actions/workflow/status/stormey2010/ha-groq-cerebras/ci.yml?branch=main&label=tests)](https://github.com/stormey2010/ha-groq-cerebras/actions/workflows/ci.yml)
+[![Codecov](https://codecov.io/gh/stormey2010/ha-groq-cerebras/branch/main/graph/badge.svg)](https://codecov.io/gh/stormey2010/ha-groq-cerebras)
+[![Hassfest](https://img.shields.io/github/actions/workflow/status/stormey2010/ha-groq-cerebras/hassfest.yml?branch=main&label=hassfest)](https://github.com/stormey2010/ha-groq-cerebras/actions/workflows/hassfest.yml)
+[![Quality Scale](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fstormey2010%2Fha-groq-cerebras%2Fmain%2Fcustom_components%2Fgroq%2Fmanifest.json&query=%24.quality_scale&label=quality%20scale&cacheSeconds=3600)](https://developers.home-assistant.io/docs/integration_quality_scale_index)
 
-[![HACS](https://img.shields.io/badge/HACS-default-orange.svg)](https://hacs.xyz)
-[![Open Issues](https://img.shields.io/github/issues/barneyonline/ha-groq)](https://github.com/barneyonline/ha-groq/issues)
+[![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
+[![Open Issues](https://img.shields.io/github/issues/stormey2010/ha-groq-cerebras)](https://github.com/stormey2010/ha-groq-cerebras/issues)
 ![Development Status](https://img.shields.io/badge/development-active-success?style=flat-square)
 
 This Home Assistant custom integration connects Groq and Cerebras cloud accounts to Assist, AI Tasks, and response actions. Groq accounts also support speech-to-text, text-to-speech, and image analysis.
@@ -18,7 +18,7 @@ This Home Assistant custom integration connects Groq and Cerebras cloud accounts
 > [!IMPORTANT]
 > This is an unofficial community project. It is not affiliated with, endorsed by, or supported by Groq or Cerebras.
 >
-> Feature availability, model availability, rate limits, token limits, and billing behavior are controlled by Groq and can vary by account, project, and model.
+> Feature availability, model availability, rate limits, token limits, and billing behavior are controlled by the selected provider and can vary by account, project, and model.
 
 ## Supported Functionality
 
@@ -48,28 +48,29 @@ Provided response actions:
 - `groq.analyze_image`: ask a question about a camera image, media image, local image, or image URL.
 - `groq.extract_text_from_image`: OCR-style text extraction from an image.
 - `groq.transcribe_audio`: transcribe a local or media-source audio file.
-- `groq.clear_cache`: clear the local response cache for a Groq account.
-- `groq.list_models`: list models visible to a Groq account.
+- `groq.clear_cache`: clear the local response cache for a provider account.
+- `groq.list_models`: list models visible to a provider account.
 
-Each configured Groq service creates its own Home Assistant device and the relevant entity for that platform. Text generation services can create Assist and AI Task entities. Speech-to-text and text-to-speech services create STT and TTS entities.
+Each configured provider service creates its own Home Assistant device and the relevant entity for that platform. Text generation services can create Assist and AI Task entities. Speech-to-text and text-to-speech services create STT and TTS entities.
 
 ## Installation
 
 ### HACS
 
-1. Open HACS.
-2. Search for Groq in Integrations.
-3. Download Groq.
-4. Restart Home Assistant.
-5. Go to Settings -> Devices & services -> Add integration -> Groq.
+This fork is installed as a HACS custom repository. Use the button below, or add `https://github.com/stormey2010/ha-groq-cerebras` as an **Integration** under HACS -> three-dot menu -> **Custom repositories**.
 
-[![Open your Home Assistant instance and open the Groq repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=barneyonline&repository=ha-groq&category=integration)
+[![Open your Home Assistant instance and open Groq and Cerebras in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=stormey2010&repository=ha-groq-cerebras&category=integration)
+
+1. Open **Groq and Cerebras** in HACS.
+2. Select **Download** and choose the latest release.
+3. Restart Home Assistant.
+4. Go to **Settings -> Devices & services -> Add integration -> Groq and Cerebras**.
 
 ### Manual
 
 1. Copy `custom_components/groq` into your Home Assistant `custom_components` directory.
 2. Restart Home Assistant.
-3. Go to Settings -> Devices & services -> Add integration -> Groq.
+3. Go to **Settings -> Devices & services -> Add integration -> Groq and Cerebras**.
 
 ## Requirements
 
@@ -78,7 +79,7 @@ Each configured Groq service creates its own Home Assistant device and the relev
 - Network access from Home Assistant to `https://api.groq.com` or `https://api.cerebras.ai`, depending on the selected provider.
 - Optional: `ffmpeg` on the Home Assistant host if you enable TTS audio normalization, Long TTS, or processed playback conversion.
 
-This integration does not use Home Assistant application credentials or OAuth. Groq API keys act as account or project credentials. Use separate Groq keys when you want separate projects, billing pools, environments, or rate-limit isolation.
+This integration does not use Home Assistant application credentials or OAuth. Provider API keys act as account or project credentials. Use separate keys when you want separate projects, billing pools, environments, or rate-limit isolation.
 
 ## Configuration
 
@@ -174,7 +175,7 @@ Removing the integration stops future Groq API calls from Home Assistant. It doe
 
 ## Useful Links
 
-- [Project Wiki](https://github.com/barneyonline/ha-groq/wiki)
+- [Project repository](https://github.com/stormey2010/ha-groq-cerebras)
 - [Groq Console](https://console.groq.com/)
 - [Groq status page](https://groqstatus.com/)
 - [Groq API reference](https://console.groq.com/docs/api-reference)

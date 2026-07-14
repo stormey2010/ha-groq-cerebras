@@ -18,7 +18,7 @@ jobs:
           script: |
             const { owner, repo } = context.repo;
             const pr = context.payload.pull_request;
-            const login = 'barneyonline';
+            const login = 'stormey2010';
 
             await github.rest.issues.addAssignees({
               owner, repo, issue_number: pr.number, assignees: [login],

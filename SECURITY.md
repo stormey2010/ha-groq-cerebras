@@ -26,8 +26,8 @@ Use GitHub's private vulnerability reporting for this repository:
 Please include:
 
 - The integration version and Home Assistant version.
-- The affected Groq service type, such as text generation, speech-to-text, text-to-speech, vision, or diagnostics.
-- Any affected Groq model, voice, endpoint, or advanced request option.
+- The affected provider and service type, such as text generation, speech-to-text, text-to-speech, vision, or diagnostics.
+- Any affected model, voice, endpoint, or advanced request option.
 - Any required configuration or environment details.
 - Whether the issue exposes API keys, credentials, personal data, audio, images, prompts, generated responses, or Home Assistant device control.
 - Any mitigation you have already confirmed.

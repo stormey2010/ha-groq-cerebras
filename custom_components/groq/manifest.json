@@ -7,17 +7,17 @@
     "intent"
   ],
   "codeowners": [
-    "@barneyonline"
+    "@stormey2010"
   ],
   "config_flow": true,
   "dependencies": [
     "conversation",
     "media_source"
   ],
-  "documentation": "https://github.com/barneyonline/ha-groq",
+  "documentation": "https://github.com/stormey2010/ha-groq-cerebras",
   "integration_type": "service",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/barneyonline/ha-groq/issues",
+  "issue_tracker": "https://github.com/stormey2010/ha-groq-cerebras/issues",
   "loggers": [],
   "quality_scale": "platinum",
   "requirements": [
