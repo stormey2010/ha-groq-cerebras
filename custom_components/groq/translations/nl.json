@@ -8,10 +8,12 @@
                 "title": "Groq toevoegen",
                 "description": "Zie documentatie voor meer informatie.",
                 "data": {
+                    "provider": "Provider",
                     "name": "Naam",
                     "api_key": "Voer de Groq API-sleutel in"
                 },
                 "data_description": {
+                    "provider": "Select Groq or Cerebras for this account.",
                     "name": "Een vriendelijke naam voor dit Groq-account. Gebruik dit om de API-sleutel of het factureringsproject te identificeren.",
                     "api_key": "Groq API sleutel voor dit account. Voeg nog een Groq-account toe als u een andere sleutel wilt gebruiken voor een afzonderlijke set services."
                 }
@@ -131,6 +133,7 @@
                         "schema_name": "Schemanaam",
                         "schema": "JSON schema",
                         "strict": "Strikte schemamodus",
+                        "simple_tools": "Simple tool configuration",
                         "request_body_options": "Extra verzoekopbouwopties"
                     },
                     "data_description": {
@@ -149,6 +152,7 @@
                         "schema_name": "Een korte identificatie die samen met het schema naar Groq wordt verzonden.",
                         "schema": "JSON Schema-object verzonden als response_format.json_schema.schema.",
                         "strict": "Gebruikt Groq beperkte decodering wanneer het geselecteerde model strikt gestructureerde uitvoer ondersteunt.",
+                        "simple_tools": "Optional tool groups and credentials. Weather, Home Assistant, and live flights need no extra credentials. See the README for the configuration keys.",
                         "request_body_options": "JSON-object samengevoegd in de hoofdtekst van het chatvoltooiingsverzoek. Dit is de geavanceerde passthrough voor elke Groq-chat-create-body-optie die niet wordt weergegeven als een speciaal veld, inclusief citation_options, compound_custom, disable_tool_validation, documents, exclude_domains, frequency_penalty, function_call, functions, include_domains, logit_bias, logprobs, max_tokens, metadata, n, parallel_tool_calls, presence_penalty, response_format, search_settings, store, stream_options, tool_choice, tools, top_logprobs, and user."
                     }
                 }

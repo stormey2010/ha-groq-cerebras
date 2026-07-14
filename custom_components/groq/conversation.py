@@ -23,10 +23,11 @@ from voluptuous_openapi import convert
 
 from .api import TextGenerationRequest
 from .attachments import async_attachment_content_parts
-from .const import CONF_SUBENTRY_ID, DOMAIN
+from .const import CONF_PROVIDER, CONF_SUBENTRY_ID, DOMAIN, provider_name
 from .feature_registry import GroqFeature
 from .model_registry import GroqCapability, GroqModelRegistry
 from .runtime import async_get_runtime
+from .simple_tools import SimpleToolRegistry
 from .text_generation import (
     compound_builtin_tools_error_message,
     request_body_options_error_message,
@@ -487,6 +488,7 @@ class GroqConversationEntity(ConversationEntity):
         self._service_data = service_data
         self._client = client
         self._model_registry = model_registry or GroqModelRegistry()
+        self._simple_tools = SimpleToolRegistry(hass, service_data)
         self._service_name = service_name(config_entry, service_data)
         self._attr_unique_id = f"{service_unique_id(config_entry, service_data)}_assist"
 
@@ -502,7 +504,7 @@ class GroqConversationEntity(ConversationEntity):
             "identifiers": {
                 (DOMAIN, service_unique_id(self._config_entry, self._service_data))
             },
-            "manufacturer": "Groq",
+            "manufacturer": provider_name(self._config_entry.data.get(CONF_PROVIDER)),
             "model": service_model(self._config_entry, self._service_data),
             "name": self._service_name,
         }
@@ -532,15 +534,17 @@ class GroqConversationEntity(ConversationEntity):
             system_prompt = f"{system_prompt}\n\n{user_input.extra_system_prompt}"
             request_system_prompt = system_prompt
 
-        tools = _chat_log_tools(chat_log)
+        hass_tools = _chat_log_tools(chat_log) or []
+        tools = [*hass_tools, *self._simple_tools.definitions] or None
         model = service_model(self._config_entry, self._service_data)
         if tools and not self._model_registry.supports(
             model, GroqCapability.TOOL_CALLING
         ):
             raise HomeAssistantError(
-                f"Groq model {model} is not known to support Home Assistant tool calls"
+                f"Groq model {model} is not known to support tool calls"
             )
         text = ""
+        local_tool_messages: list[dict[str, Any]] = []
         use_streaming = (
             not tools
             and service_stream(self._config_entry, self._service_data)
@@ -552,6 +556,7 @@ class GroqConversationEntity(ConversationEntity):
                 chat_log,
                 request_system_prompt,
                 tools,
+                local_tool_messages,
             )
             if error := request_body_options_error_message(
                 self._model_registry,
@@ -574,22 +579,68 @@ class GroqConversationEntity(ConversationEntity):
             result = await self._client.async_generate_text(request)
             text = result.text
             tool_calls = _result_tool_calls(result)
+            simple_tool_calls = [
+                tool_call
+                for tool_call in tool_calls
+                if self._simple_tools.handles(tool_call.tool_name)
+            ]
+            hass_tool_calls = [
+                tool_call
+                for tool_call in tool_calls
+                if not self._simple_tools.handles(tool_call.tool_name)
+            ]
             assistant_content = AssistantContent(
                 agent_id=user_input.agent_id,
                 content=text or None,
                 thinking_content=getattr(result, "reasoning", None),
-                tool_calls=tool_calls or None,
+                tool_calls=hass_tool_calls or None,
                 native=_assistant_native(result) or None,
             )
-            if tool_calls and hasattr(chat_log, "async_add_assistant_content"):
+            if simple_tool_calls:
+                local_tool_messages.append(
+                    {
+                        "role": "assistant",
+                        "content": text or None,
+                        "tool_calls": [
+                            message
+                            for tool_call in simple_tool_calls
+                            if (message := _tool_call_message(tool_call))
+                        ],
+                    }
+                )
+                for tool_call in simple_tool_calls:
+                    try:
+                        tool_result = await self._simple_tools.async_execute(
+                            tool_call.tool_name,
+                            tool_call.tool_args,
+                        )
+                    except (
+                        Exception
+                    ) as err:  # noqa: BLE001 - tool errors return to model
+                        tool_result = {"error": str(err)}
+                    local_tool_messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": _tool_call_id(tool_call),
+                            "name": tool_call.tool_name,
+                            "content": json.dumps(
+                                tool_result,
+                                separators=(",", ":"),
+                                default=str,
+                            ),
+                        }
+                    )
+            if hass_tool_calls and hasattr(chat_log, "async_add_assistant_content"):
                 async for content in chat_log.async_add_assistant_content(
                     assistant_content
                 ):
                     if getattr(content, "content", None):
                         text = content.content
-            else:
+            elif not simple_tool_calls:
                 chat_log.async_add_assistant_content_without_tools(assistant_content)
-            if not getattr(chat_log, "unresponded_tool_results", False):
+            if not simple_tool_calls and not getattr(
+                chat_log, "unresponded_tool_results", False
+            ):
                 break
         else:
             raise HomeAssistantError("Groq Assist exceeded the tool-call limit")
@@ -608,19 +659,23 @@ class GroqConversationEntity(ConversationEntity):
         chat_log: conversation.ChatLog,
         system_prompt: str | None,
         tools: list[dict[str, Any]] | None,
+        local_tool_messages: list[dict[str, Any]] | None = None,
     ) -> TextGenerationRequest:
         """Build a Groq text generation request for an Assist turn."""
         return TextGenerationRequest(
             prompt=user_input.text,
             model=(model := service_model(self._config_entry, self._service_data)),
-            messages=await _async_chat_log_messages(
-                self.hass,
-                self._model_registry,
-                model,
-                chat_log,
-                user_input.text,
-                getattr(user_input, "attachments", None),
-            ),
+            messages=[
+                *await _async_chat_log_messages(
+                    self.hass,
+                    self._model_registry,
+                    model,
+                    chat_log,
+                    user_input.text,
+                    getattr(user_input, "attachments", None),
+                ),
+                *(local_tool_messages or []),
+            ],
             system_prompt=system_prompt,
             temperature=service_temperature(self._config_entry, self._service_data),
             max_tokens=service_max_tokens(

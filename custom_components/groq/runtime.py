@@ -17,6 +17,7 @@ from .const import (
     CONF_ENABLED_FEATURES,
     CONF_INCLUDE_REASONING,
     CONF_MODEL,
+    CONF_PROVIDER,
     CONF_PROMPT_CACHING,
     CONF_REASONING_EFFORT,
     CONF_REASONING_FORMAT,
@@ -27,6 +28,7 @@ from .const import (
     FEATURE_TEXT_TO_SPEECH,
     FEATURE_TEXT_GENERATION,
     PROMPT_CACHING_MODELS,
+    provider_base_url,
 )
 from .errors import GroqApiError, GroqResponseError
 from .feature_registry import (
@@ -73,10 +75,12 @@ def _has_legacy_tts_config(entry: ConfigEntry) -> bool:
 
 def build_runtime(hass: HomeAssistant, entry: ConfigEntry) -> GroqRuntimeData:
     """Create runtime data for a config entry."""
-    base_url = entry_value(
-        entry,
-        CONF_BASE_URL,
-        normalize_base_url(entry_value(entry, CONF_URL)),
+    configured_base_url = entry_value(entry, CONF_BASE_URL)
+    legacy_url = entry_value(entry, CONF_URL)
+    base_url = (
+        normalize_base_url(configured_base_url or legacy_url)
+        if configured_base_url or legacy_url
+        else provider_base_url(entry_value(entry, CONF_PROVIDER))
     )
     cache_size = int(
         entry_value(

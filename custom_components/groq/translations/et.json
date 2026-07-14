@@ -8,10 +8,12 @@
                 "title": "Lisage Groq",
                 "description": "Lisateabe saamiseks vaadake dokumentatsiooni.",
                 "data": {
+                    "provider": "Provider",
                     "name": "Nimi",
                     "api_key": "Sisestage võti Groq API"
                 },
                 "data_description": {
+                    "provider": "Select Groq or Cerebras for this account.",
                     "name": "Selle Groq konto sõbralik nimi. Kasutage seda API-võtme või arveldusprojekti tuvastamiseks.",
                     "api_key": "Selle konto võti Groq API. Lisage veel üks Groq konto, kui soovite kasutada eraldi teenustekomplekti jaoks teistsugust võtit."
                 }
@@ -131,6 +133,7 @@
                         "schema_name": "Skeemi nimi",
                         "schema": "JSON schema",
                         "strict": "Range skeemirežiim",
+                        "simple_tools": "Simple tool configuration",
                         "request_body_options": "Taotluse lisavalikud"
                     },
                     "data_description": {
@@ -149,6 +152,7 @@
                         "schema_name": "Lühike identifikaator, mis saadeti numbrile Groq koos skeemiga.",
                         "schema": "JSON Schema objekt saadeti kui response_format.json_schema.schema.",
                         "strict": "Kasutab Groq piiratud dekodeerimist, kui valitud mudel toetab rangelt struktureeritud väljundeid.",
+                        "simple_tools": "Optional tool groups and credentials. Weather, Home Assistant, and live flights need no extra credentials. See the README for the configuration keys.",
                         "request_body_options": "JSON objekt liideti vestluse lõpetamise taotluse kehasse. See on täpsem läbipääs igale Groq vestluse keha loomise valikule, mida ei kuvata spetsiaalse väljana, sealhulgas citation_options, compound_custom, disable_tool_validation, documents, exclude_domains, frequency_penalty, function_call, functions, include_domains, logit_bias, logprobs, max_tokens, metadata, n, parallel_tool_calls, presence_penalty, response_format, search_settings, store, stream_options, tool_choice, tools, top_logprobs, and user."
                     }
                 }

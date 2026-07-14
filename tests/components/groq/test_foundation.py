@@ -18,6 +18,7 @@ from custom_components.groq.attachments import (
     attachment_mime_type,
     attachment_path,
 )
+from custom_components.groq import config_flow
 from custom_components.groq.api import (
     GroqApiClient,
     StructuredGenerationRequest,
@@ -49,18 +50,27 @@ from custom_components.groq.const import (
     CONF_PROMPT_CACHING,
     CONF_REASONING_EFFORT,
     CONF_REASONING_FORMAT,
+    CONF_SIMPLE_TOOLS,
     CONF_STRUCTURED_OUTPUTS,
+    CEREBRAS_BASE_URL,
     DEFAULT_SYSTEM_PROMPT,
     TEXT_MODELS,
     VISION_MODELS,
+    provider_setup_features,
+    provider_base_url,
+    provider_name,
 )
+from custom_components.groq.config_flow import GroqServiceSubentryFlow
 from custom_components.groq.feature_registry import (
     CONF_ENABLED_FEATURES,
     GroqFeature,
     GroqFeatureRegistry,
     enabled_features_from_options,
 )
-from custom_components.groq.flow_schemas import validate_text_generation_input
+from custom_components.groq.flow_schemas import (
+    text_generation_advanced_schema,
+    validate_text_generation_input,
+)
 from custom_components.groq.model_registry import (
     GroqCapability,
     GroqModelRegistry,
@@ -77,6 +87,7 @@ from custom_components.groq.services import (
     _handle_generate_text,
     _handle_list_models,
 )
+from custom_components.groq.simple_tools import SimpleToolRegistry
 from custom_components.groq.stt import GroqSTTEntity
 
 
@@ -217,6 +228,41 @@ class DummyRealToolTextClient(DummyToolTextClient):
             )
         return SimpleNamespace(
             text="The kitchen light is on.",
+            model=request.model,
+            usage={},
+            usage_breakdown=None,
+            reasoning=None,
+            tool_calls=None,
+            executed_tools=None,
+            raw={},
+        )
+
+
+class DummySimpleToolTextClient(DummyToolTextClient):
+    async def async_generate_text(self, request):
+        self.requests.append(request)
+        if len(self.requests) == 1:
+            return SimpleNamespace(
+                text="",
+                model=request.model,
+                usage={},
+                usage_breakdown=None,
+                reasoning=None,
+                tool_calls=[
+                    {
+                        "id": "call_weather",
+                        "type": "function",
+                        "function": {
+                            "name": "get_weather_by_city",
+                            "arguments": '{"city":"Sacramento"}',
+                        },
+                    }
+                ],
+                executed_tools=None,
+                raw={},
+            )
+        return SimpleNamespace(
+            text="It is sunny in Sacramento.",
             model=request.model,
             usage={},
             usage_breakdown=None,
@@ -679,6 +725,106 @@ async def test_api_client_generates_text_and_sends_auth_header():
     )
     assert call["kwargs"]["headers"]["Authorization"] == "Bearer request-api-key"
     assert "Groq-Model-Version" not in call["kwargs"]["headers"]
+
+
+@pytest.mark.asyncio
+async def test_cerebras_client_uses_provider_endpoint_and_max_tokens():
+    session = DummySession(
+        DummyResponse(
+            200,
+            {"content-type": "application/json"},
+            {
+                "model": "gpt-oss-120b",
+                "choices": [{"message": {"content": "done"}}],
+            },
+        )
+    )
+    client = GroqApiClient(
+        DummyHass(),
+        api_key="cerebras-key",
+        base_url=CEREBRAS_BASE_URL,
+        session=session,
+    )
+
+    await client.async_generate_text(
+        TextGenerationRequest(
+            prompt="Go",
+            model="gpt-oss-120b",
+            max_tokens=32768,
+            temperature=1,
+            top_p=1,
+            reasoning_effort="low",
+            stream=True,
+        )
+    )
+
+    call = session.calls[0]
+    assert call["args"][:2] == (
+        "POST",
+        "https://api.cerebras.ai/v1/chat/completions",
+    )
+    assert call["kwargs"]["json"] == {
+        "model": "gpt-oss-120b",
+        "messages": [{"role": "user", "content": "Go"}],
+        "temperature": 1,
+        "max_tokens": 32768,
+        "top_p": 1,
+        "reasoning_effort": "low",
+        "stream": True,
+    }
+    assert "max_completion_tokens" not in call["kwargs"]["json"]
+
+
+def test_cerebras_model_and_service_capabilities_are_text_only():
+    model = model_from_api({"id": "gpt-oss-120b"})
+
+    assert GroqCapability.TEXT_GENERATION in model.capabilities
+    assert GroqCapability.REASONING in model.capabilities
+    assert provider_setup_features("cerebras") == ("text_generation",)
+    assert provider_base_url("cerebras") == CEREBRAS_BASE_URL
+    assert provider_name("cerebras") == "Cerebras"
+    assert provider_name("groq") == "Groq"
+
+
+@pytest.mark.asyncio
+async def test_cerebras_account_validation_uses_provider_model_endpoint():
+    with patch.object(
+        config_flow,
+        "_async_fetch_available_models_for_provider",
+        return_value=["gpt-oss-120b"],
+    ) as fetch_models:
+        assert (
+            await config_flow._async_validate_api_key_for_provider(
+                DummyHass(), "cerebras-key", "cerebras"
+            )
+            is None
+        )
+        assert (
+            await config_flow._async_validate_account_api_key(
+                DummyHass(), "cerebras-key", "cerebras"
+            )
+            is None
+        )
+    assert fetch_models.await_count == 2
+
+
+def test_cerebras_text_generation_defaults_match_api_profile(monkeypatch):
+    flow = GroqServiceSubentryFlow()
+    monkeypatch.setattr(
+        flow,
+        "_get_entry",
+        lambda: SimpleNamespace(data={"provider": "cerebras"}, options={}),
+    )
+
+    assert flow._text_generation_defaults() == {
+        "model": "gpt-oss-120b",
+        "temperature": 1.0,
+        "max_tokens": 32768,
+        "top_p": 1.0,
+        "reasoning_effort": "low",
+        "stream": True,
+        "protect_free_tier": False,
+    }
 
 
 @pytest.mark.asyncio
@@ -2533,6 +2679,179 @@ async def test_conversation_entity_uses_real_chat_log_tool_execution():
         "tool_call_id": "call_real",
         "name": "GetState",
         "content": '{"state":"on"}',
+    }
+
+
+def test_simple_tool_registry_is_opt_in_and_gates_credentials():
+    registry = SimpleToolRegistry(DummyHass(), {})
+    assert registry.definitions == []
+
+    registry = SimpleToolRegistry(
+        DummyHass(),
+        {
+            CONF_SIMPLE_TOOLS: {
+                "enabled": [
+                    "weather",
+                    "web_search",
+                    "home_assistant",
+                    "flight_tracker",
+                    "apple_calendar",
+                    "google_workspace",
+                    "spotify",
+                    "openroute",
+                ]
+            }
+        },
+    )
+    names = {definition["function"]["name"] for definition in registry.definitions}
+    assert names == {
+        "get_weather",
+        "get_weather_by_city",
+        "ha_get_overview",
+        "ha_search",
+        "ha_get_state",
+        "ha_call_service",
+        "get_overhead_flights",
+        "get_states_in_bbox",
+    }
+
+
+def test_simple_tool_registry_exposes_all_approved_tools_when_configured():
+    registry = SimpleToolRegistry(
+        DummyHass(),
+        {
+            CONF_SIMPLE_TOOLS: {
+                "enabled": [
+                    "weather",
+                    "web_search",
+                    "home_assistant",
+                    "flight_tracker",
+                    "apple_calendar",
+                    "google_workspace",
+                    "spotify",
+                    "openroute",
+                ],
+                "exa_api_key": "exa",
+                "apple_calendar_email": "person@example.com",
+                "apple_calendar_app_password": "password",
+                "google_access_token": "google",
+                "spotify_access_token": "spotify",
+                "openroute_api_key": "openroute",
+            }
+        },
+    )
+    names = [definition["function"]["name"] for definition in registry.definitions]
+    assert len(names) == 36
+    assert len(names) == len(set(names))
+    assert "web_search" in names
+    assert "calendar_get_events" in names
+    assert "google_create_task" in names
+    assert "spotify_adjust_volume" in names
+    assert "openroute_reverse_geocode" in names
+
+
+def test_simple_tools_are_in_advanced_schema_and_require_tool_model():
+    schema_keys = {
+        getattr(key, "schema", key) for key in text_generation_advanced_schema().schema
+    }
+    assert CONF_SIMPLE_TOOLS in schema_keys
+
+    errors = validate_text_generation_input(
+        {CONF_MODEL: "whisper-large-v3", CONF_SIMPLE_TOOLS: {"enabled": ["weather"]}},
+        GroqModelRegistry(),
+    )
+    assert errors[CONF_SIMPLE_TOOLS] == "unsupported_tool_calling_model"
+
+
+@pytest.mark.asyncio
+async def test_conversation_entity_executes_simple_tool_and_returns_result_to_model():
+    class FakeSimpleTools:
+        definitions = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_weather_by_city",
+                    "description": "Get weather",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
+
+        @staticmethod
+        def handles(name):
+            return name == "get_weather_by_city"
+
+        @staticmethod
+        async def async_execute(name, args):
+            assert name == "get_weather_by_city"
+            assert args == {"city": "Sacramento"}
+            return {"condition": "sunny"}
+
+    entry = DummyEntry()
+    client = DummySimpleToolTextClient()
+    entity = GroqConversationEntity(
+        DummyHass(),
+        entry,
+        {
+            "unique_id": "simple-tools-service",
+            "name": "Cerebras Assist",
+            "model": "gpt-oss-120b",
+            "stream": True,
+        },
+        client,
+    )
+    entity._simple_tools = FakeSimpleTools()
+
+    result = await entity._async_handle_message(
+        SimpleNamespace(
+            text="What is the weather in Sacramento?",
+            language="en",
+            agent_id="conversation.cerebras_assist",
+            extra_system_prompt=None,
+            attachments=None,
+        ),
+        DummyChatLog(),
+    )
+
+    assert result.response.speech["plain"]["speech"] == "It is sunny in Sacramento."
+    assert len(client.requests) == 2
+    assert client.requests[0].tools[0]["function"]["name"] == "get_weather_by_city"
+    assert client.requests[1].messages[-1] == {
+        "role": "tool",
+        "tool_call_id": "call_weather",
+        "name": "get_weather_by_city",
+        "content": '{"condition":"sunny"}',
+    }
+
+    class FailingSimpleTools(FakeSimpleTools):
+        @staticmethod
+        async def async_execute(name, args):
+            raise ValueError("weather provider unavailable")
+
+    failing_client = DummySimpleToolTextClient()
+    failing_entity = GroqConversationEntity(
+        DummyHass(),
+        entry,
+        {
+            "unique_id": "failing-tools-service",
+            "name": "Cerebras Assist",
+            "model": "gpt-oss-120b",
+        },
+        failing_client,
+    )
+    failing_entity._simple_tools = FailingSimpleTools()
+    await failing_entity._async_handle_message(
+        SimpleNamespace(
+            text="What is the weather in Sacramento?",
+            language="en",
+            agent_id="conversation.cerebras_assist",
+            extra_system_prompt=None,
+            attachments=None,
+        ),
+        DummyChatLog(),
+    )
+    assert json.loads(failing_client.requests[1].messages[-1]["content"]) == {
+        "error": "weather provider unavailable"
     }
 
 

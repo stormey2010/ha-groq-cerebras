@@ -8,10 +8,12 @@
                 "title": "Agregar Groq",
                 "description": "Consulte la documentación para obtener más información.",
                 "data": {
+                    "provider": "Provider",
                     "name": "Nombre",
                     "api_key": "Introduzca la clave Groq API"
                 },
                 "data_description": {
+                    "provider": "Select Groq or Cerebras for this account.",
                     "name": "Un nombre descriptivo para esta cuenta Groq. Utilícelo para identificar la clave API o el proyecto de facturación.",
                     "api_key": "Groq API clave para esta cuenta. Agregue otra cuenta Groq si desea utilizar una clave diferente para un conjunto de servicios separado."
                 }
@@ -131,6 +133,7 @@
                         "schema_name": "Nombre del esquema",
                         "schema": "JSON schema",
                         "strict": "Modo de esquema estricto",
+                        "simple_tools": "Simple tool configuration",
                         "request_body_options": "Opciones adicionales del cuerpo de la solicitud"
                     },
                     "data_description": {
@@ -149,6 +152,7 @@
                         "schema_name": "Un identificador corto enviado a Groq con el esquema.",
                         "schema": "Objeto JSON Schema enviado como response_format.json_schema.schema.",
                         "strict": "Utiliza la decodificación restringida Groq cuando el modelo seleccionado admite salidas estructuradas estrictas.",
+                        "simple_tools": "Optional tool groups and credentials. Weather, Home Assistant, and live flights need no extra credentials. See the README for the configuration keys.",
                         "request_body_options": "Objeto JSON fusionado en el cuerpo de la solicitud de finalización del chat. Este es el paso avanzado para cada opción de creación de cuerpo de chat Groq que no se muestra como un campo dedicado, incluidos citation_options, compound_custom, disable_tool_validation, documents, exclude_domains, frequency_penalty, function_call, functions, include_domains, logit_bias, logprobs, max_tokens, metadata, n, parallel_tool_calls, presence_penalty, response_format, search_settings, store, stream_options, tool_choice, tools, top_logprobs, and user."
                     }
                 }

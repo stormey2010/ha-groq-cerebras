@@ -8,10 +8,12 @@
                 "title": "Προσθήκη Groq",
                 "description": "Δείτε την τεκμηρίωση για περισσότερες πληροφορίες.",
                 "data": {
+                    "provider": "Provider",
                     "name": "Όνομα",
                     "api_key": "Εισαγάγετε το κλειδί Groq API"
                 },
                 "data_description": {
+                    "provider": "Select Groq or Cerebras for this account.",
                     "name": "Ένα φιλικό όνομα για αυτόν τον λογαριασμό Groq. Χρησιμοποιήστε το για να προσδιορίσετε το κλειδί API ή το έργο χρέωσης.",
                     "api_key": "Κλειδί Groq API για αυτόν τον λογαριασμό. Προσθέστε έναν άλλο λογαριασμό Groq εάν θέλετε να χρησιμοποιήσετε διαφορετικό κλειδί για ένα ξεχωριστό σύνολο υπηρεσιών."
                 }
@@ -131,6 +133,7 @@
                         "schema_name": "Όνομα σχήματος",
                         "schema": "JSON schema",
                         "strict": "Αυστηρή λειτουργία σχήματος",
+                        "simple_tools": "Simple tool configuration",
                         "request_body_options": "Πρόσθετες επιλογές σώματος αιτήματος"
                     },
                     "data_description": {
@@ -149,6 +152,7 @@
                         "schema_name": "Ένα σύντομο αναγνωριστικό στάλθηκε στο Groq με το σχήμα.",
                         "schema": "Το αντικείμενο JSON Schema στάλθηκε ως response_format.json_schema.schema.",
                         "strict": "Χρησιμοποιεί περιορισμένη αποκωδικοποίηση Groq όταν το επιλεγμένο μοντέλο υποστηρίζει αυστηρές δομημένες εξόδους.",
+                        "simple_tools": "Optional tool groups and credentials. Weather, Home Assistant, and live flights need no extra credentials. See the README for the configuration keys.",
                         "request_body_options": "Το αντικείμενο JSON συγχωνεύτηκε στο σώμα αιτήματος ολοκλήρωσης συνομιλίας. Αυτή είναι η προηγμένη μετάβαση για κάθε επιλογή δημιουργίας σώματος συνομιλίας Groq που δεν εμφανίζεται ως αποκλειστικό πεδίο, συμπεριλαμβανομένων των citation_options, compound_custom, disable_tool_validation, documents, exclude_domains, frequency_penalty, function_call, functions, include_domains, logit_bias, logprobs, max_tokens, metadata, n, parallel_tool_calls, presence_penalty, response_format, search_settings, store, stream_options, tool_choice, tools, top_logprobs, and user."
                     }
                 }

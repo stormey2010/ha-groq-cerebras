@@ -31,6 +31,7 @@ from .const import (
     CONF_MODEL,
     CONF_NAME,
     CONF_NORMALIZE_AUDIO,
+    CONF_PROVIDER,
     CONF_RESPONSE_FORMAT,
     CONF_SAMPLE_RATE,
     CONF_SPEED,
@@ -38,6 +39,7 @@ from .const import (
     CONF_VOCAL_DIRECTIONS,
     CONF_VOICE,
     DEFAULT_MODEL,
+    DEFAULT_PROVIDER,
     DOMAIN,
     FEATURE_IMAGE_RECOGNITION,
     FEATURE_LABELS,
@@ -45,6 +47,19 @@ from .const import (
     FEATURE_TEXT_GENERATION,
     FEATURE_TEXT_TO_SPEECH,
     MODELS,
+    CEREBRAS_DEFAULT_MAX_TOKENS,
+    CEREBRAS_DEFAULT_REASONING_EFFORT,
+    CEREBRAS_DEFAULT_TEMPERATURE,
+    CEREBRAS_DEFAULT_TEXT_MODEL,
+    CEREBRAS_DEFAULT_TOP_P,
+    CEREBRAS_TEXT_MODELS,
+    CONF_MAX_TOKENS,
+    CONF_PROTECT_FREE_TIER,
+    CONF_REASONING_EFFORT,
+    CONF_STREAM,
+    CONF_TEMPERATURE,
+    CONF_TOP_P,
+    PROVIDER_CEREBRAS,
     RESPONSE_FORMATS,
     SETUP_FEATURES,
     STT_MODELS,
@@ -53,6 +68,9 @@ from .const import (
     UNIQUE_ID,
     VISION_MODELS,
     VOICES,
+    normalize_provider,
+    provider_base_url,
+    provider_setup_features,
     stt_language_default,
     voice_options_for_model,
 )
@@ -77,6 +95,7 @@ from .vocal_directions import vocal_directions_validation_error
 from .model_registry import (
     GroqModel,
     GroqModelRegistry,
+    model_from_api,
 )
 from .errors import GroqApiError, GroqResponseError
 
@@ -124,6 +143,7 @@ def _api_key_duplicate_error(
     api_key: str,
     *,
     current_entry_id: str | None = None,
+    provider: str = DEFAULT_PROVIDER,
 ) -> str | None:
     """Return an error when another Groq entry already uses an API key."""
     config_entries = getattr(hass, "config_entries", None)
@@ -135,7 +155,13 @@ def _api_key_duplicate_error(
             continue
         data = getattr(entry, "data", {}) or {}
         options = getattr(entry, "options", {}) or {}
-        if api_key in (data.get(CONF_API_KEY), options.get(CONF_API_KEY)):
+        entry_provider = normalize_provider(
+            options.get(CONF_PROVIDER, data.get(CONF_PROVIDER))
+        )
+        if entry_provider == normalize_provider(provider) and api_key in (
+            data.get(CONF_API_KEY),
+            options.get(CONF_API_KEY),
+        ):
             return "duplicate_api_key"
     return None
 
@@ -166,11 +192,16 @@ async def fetch_available(hass, endpoint: str, api_key: str | None = None) -> li
     return []
 
 
-async def async_fetch_available_models(hass, api_key: str) -> list[GroqModel]:
-    """Fetch active models visible to a Groq API key."""
+async def _async_fetch_available_models_for_provider(
+    hass,
+    api_key: str,
+    provider: str = DEFAULT_PROVIDER,
+) -> list[GroqModel]:
+    """Fetch active models visible to a provider API key."""
     client = GroqApiClient(
         hass,
         api_key=api_key,
+        base_url=provider_base_url(provider),
         session=async_get_clientsession(hass),
         request_timeout=API_KEY_VALIDATION_TIMEOUT,
     )
@@ -182,22 +213,48 @@ async def async_fetch_available_models(hass, api_key: str) -> list[GroqModel]:
         raise RuntimeError(str(err)) from err
 
 
+async def async_fetch_available_models(hass, api_key: str) -> list[GroqModel]:
+    """Fetch active models visible to a Groq API key."""
+    return await _async_fetch_available_models_for_provider(
+        hass,
+        api_key,
+        DEFAULT_PROVIDER,
+    )
+
+
 async def async_get_model_registry(
     hass,
     api_key: str | None,
+    provider: str = DEFAULT_PROVIDER,
 ) -> GroqModelRegistry:
     """Return a model registry discovered from Groq, with built-ins as fallback."""
+    fallback_registry = (
+        GroqModelRegistry(
+            [model_from_api({"id": CEREBRAS_DEFAULT_TEXT_MODEL})],
+            include_built_ins=False,
+        )
+        if normalize_provider(provider) == PROVIDER_CEREBRAS
+        else GroqModelRegistry()
+    )
     if not api_key:
-        return GroqModelRegistry()
+        return fallback_registry
     try:
-        models = await async_fetch_available_models(hass, api_key)
+        models = (
+            await async_fetch_available_models(hass, api_key)
+            if normalize_provider(provider) == DEFAULT_PROVIDER
+            else await _async_fetch_available_models_for_provider(
+                hass,
+                api_key,
+                provider,
+            )
+        )
     except ValueError:
         raise
     except Exception as err:  # pylint: disable=broad-except
         _LOGGER.debug("Could not fetch Groq model list: %s", err)
-        return GroqModelRegistry()
+        return fallback_registry
     if not models:
-        return GroqModelRegistry()
+        return fallback_registry
     return GroqModelRegistry(models, include_built_ins=False)
 
 
@@ -220,10 +277,17 @@ def _llm_api_select_options(hass) -> list[dict[str, str]]:
     return [{"label": api.name, "value": api.id} for api in apis]
 
 
-async def async_validate_api_key(hass, api_key: str) -> str | None:
-    """Validate a Groq API key against a lightweight authenticated endpoint."""
+async def _async_validate_api_key_for_provider(
+    hass,
+    api_key: str,
+    provider: str = DEFAULT_PROVIDER,
+) -> str | None:
+    """Validate a provider API key against a lightweight authenticated endpoint."""
     try:
-        await async_fetch_available_models(hass, api_key)
+        if normalize_provider(provider) == DEFAULT_PROVIDER:
+            await async_fetch_available_models(hass, api_key)
+        else:
+            await _async_fetch_available_models_for_provider(hass, api_key, provider)
     except ValueError:
         return "invalid_auth"
     except (aiohttp.ContentTypeError, TypeError) as err:
@@ -244,6 +308,22 @@ async def async_validate_api_key(hass, api_key: str) -> str | None:
     return None
 
 
+async def async_validate_api_key(hass, api_key: str) -> str | None:
+    """Validate a Groq API key, preserving the original public helper contract."""
+    return await _async_validate_api_key_for_provider(hass, api_key, DEFAULT_PROVIDER)
+
+
+async def _async_validate_account_api_key(
+    hass,
+    api_key: str,
+    provider: str,
+) -> str | None:
+    """Validate an account key against its configured provider."""
+    if normalize_provider(provider) == DEFAULT_PROVIDER:
+        return await async_validate_api_key(hass, api_key)
+    return await _async_validate_api_key_for_provider(hass, api_key, provider)
+
+
 def is_tts_model(model: str) -> bool:
     """Return True for Groq model ids that look usable for speech output."""
     model_id = model.lower()
@@ -257,9 +337,13 @@ def get_model_options(discovered_models: list[str]) -> list[str]:
     return sorted(models)
 
 
-async def get_dynamic_options(hass, api_key: str | None) -> tuple[list[str], list[str]]:
+async def get_dynamic_options(
+    hass,
+    api_key: str | None,
+    provider: str = DEFAULT_PROVIDER,
+) -> tuple[list[str], list[str]]:
     """Return a dynamic list of models and the built-in voices."""
-    registry = await async_get_model_registry(hass, api_key)
+    registry = await async_get_model_registry(hass, api_key, provider)
     models = _model_ids_for_feature(registry, GroqFeature.TEXT_TO_SPEECH, MODELS)
     return models, VOICES
 
@@ -272,7 +356,7 @@ class GroqConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         errors = {}
-        schema = setup_schema()
+        schema = setup_schema(user_input)
         if user_input is not None:
             try:
                 await validate_user_input(user_input)
@@ -282,15 +366,17 @@ class GroqConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
                 # Allow multiple named Groq accounts, but do not create a
                 # duplicate account for the same API key.
                 self._abort_if_unique_id_configured()
-                validation_error = await async_validate_api_key(
+                validation_error = await _async_validate_account_api_key(
                     self.hass,
                     entry_data[CONF_API_KEY],
+                    entry_data[CONF_PROVIDER],
                 )
                 errors.update(_api_key_validation_errors(validation_error))
                 if not errors and (
                     duplicate_error := _api_key_duplicate_error(
                         self.hass,
                         entry_data[CONF_API_KEY],
+                        provider=entry_data[CONF_PROVIDER],
                     )
                 ):
                     errors["base"] = duplicate_error
@@ -336,13 +422,17 @@ class GroqConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
             unique_id = _entry_unique_id(entry)
 
             if api_key:
-                validation_error = await async_validate_api_key(self.hass, api_key)
+                provider = normalize_provider(entry.data.get(CONF_PROVIDER))
+                validation_error = await _async_validate_account_api_key(
+                    self.hass, api_key, provider
+                )
                 errors.update(_api_key_validation_errors(validation_error))
                 if not errors and (
                     duplicate_error := _api_key_duplicate_error(
                         self.hass,
                         api_key,
                         current_entry_id=entry.entry_id,
+                        provider=provider,
                     )
                 ):
                     errors["base"] = duplicate_error
@@ -387,12 +477,15 @@ class GroqConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
     @callback
     def async_get_supported_subentry_types(cls, config_entry):
         """Return subentry types supported by this integration."""
-        return {
+        supported = {
             FEATURE_TEXT_GENERATION: GroqServiceSubentryFlow,
             FEATURE_SPEECH_TO_TEXT: GroqServiceSubentryFlow,
             FEATURE_TEXT_TO_SPEECH: GroqServiceSubentryFlow,
             FEATURE_IMAGE_RECOGNITION: GroqServiceSubentryFlow,
         }
+        entry_data = getattr(config_entry, "data", {}) or {}
+        features = provider_setup_features(entry_data.get(CONF_PROVIDER))
+        return {feature: supported[feature] for feature in features}
 
     async def async_step_reauth(
         self, entry_data: dict[str, Any]
@@ -417,13 +510,17 @@ class GroqConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
                 reauth_entry = getattr(self, "_reauth_entry", None)
                 if reauth_entry is None:
                     return self.async_abort(reason="unknown")
-                validation_error = await async_validate_api_key(self.hass, api_key)
+                provider = normalize_provider(reauth_entry.data.get(CONF_PROVIDER))
+                validation_error = await _async_validate_account_api_key(
+                    self.hass, api_key, provider
+                )
                 errors.update(_api_key_validation_errors(validation_error))
                 if not errors and (
                     duplicate_error := _api_key_duplicate_error(
                         self.hass,
                         api_key,
                         current_entry_id=reauth_entry.entry_id,
+                        provider=provider,
                     )
                 ):
                     errors["base"] = duplicate_error
@@ -480,9 +577,12 @@ class GroqOptionsFlow(OptionsFlow):
             if not user_input.get(CONF_API_KEY):
                 user_input.pop(CONF_API_KEY, None)
             else:
-                validation_error = await async_validate_api_key(
+                validation_error = await _async_validate_account_api_key(
                     self.hass,
                     user_input[CONF_API_KEY],
+                    normalize_provider(
+                        getattr(self._current_entry(), "data", {}).get(CONF_PROVIDER)
+                    ),
                 )
                 errors.update(_api_key_validation_errors(validation_error))
                 current_entry = self._current_entry()
@@ -492,6 +592,9 @@ class GroqOptionsFlow(OptionsFlow):
                         self.hass,
                         user_input[CONF_API_KEY],
                         current_entry_id=current_entry_id,
+                        provider=normalize_provider(
+                            getattr(current_entry, "data", {}).get(CONF_PROVIDER)
+                        ),
                     )
                 ):
                     errors["base"] = duplicate_error
@@ -601,19 +704,55 @@ class GroqServiceSubentryFlow(ConfigSubentryFlow):
         options = getattr(entry, "options", {}) or {}
         return options.get(CONF_API_KEY) or data.get(CONF_API_KEY)
 
+    def _account_provider(self) -> str:
+        """Return the provider configured for this account."""
+        try:
+            entry = self._get_entry()
+        except (AttributeError, TypeError):
+            return DEFAULT_PROVIDER
+        data = getattr(entry, "data", {}) or {}
+        options = getattr(entry, "options", {}) or {}
+        return normalize_provider(options.get(CONF_PROVIDER, data.get(CONF_PROVIDER)))
+
+    def _text_generation_defaults(self) -> dict[str, Any]:
+        """Return provider-specific defaults for a text generation service."""
+        if self._account_provider() != PROVIDER_CEREBRAS:
+            return {}
+        return {
+            CONF_MODEL: CEREBRAS_DEFAULT_TEXT_MODEL,
+            CONF_TEMPERATURE: CEREBRAS_DEFAULT_TEMPERATURE,
+            CONF_MAX_TOKENS: CEREBRAS_DEFAULT_MAX_TOKENS,
+            CONF_TOP_P: CEREBRAS_DEFAULT_TOP_P,
+            CONF_REASONING_EFFORT: CEREBRAS_DEFAULT_REASONING_EFFORT,
+            CONF_STREAM: True,
+            CONF_PROTECT_FREE_TIER: False,
+        }
+
     async def _model_registry(
         self,
         service_data: dict[str, Any] | None = None,
     ) -> GroqModelRegistry:
         """Return discovered model metadata for the active account key."""
         api_key = self._account_api_key()
-        cache_key = api_key or ""
+        provider = self._account_provider()
+        cache_key = f"{provider}:{api_key or ''}"
         if cache_key in self._model_registry_cache:
             return self._model_registry_cache[cache_key]
         try:
-            registry = await async_get_model_registry(self.hass, api_key)
+            registry = (
+                await async_get_model_registry(self.hass, api_key)
+                if provider == DEFAULT_PROVIDER
+                else await async_get_model_registry(self.hass, api_key, provider)
+            )
         except ValueError:
-            registry = GroqModelRegistry()
+            registry = (
+                GroqModelRegistry(
+                    [model_from_api({"id": CEREBRAS_DEFAULT_TEXT_MODEL})],
+                    include_built_ins=False,
+                )
+                if provider == PROVIDER_CEREBRAS
+                else GroqModelRegistry()
+            )
         self._model_registry_cache[cache_key] = registry
         return registry
 
@@ -635,16 +774,30 @@ class GroqServiceSubentryFlow(ConfigSubentryFlow):
 
         return self.async_show_form(
             step_id="init",
-            data_schema=service_type_schema(),
+            data_schema=service_type_schema(
+                provider_setup_features(self._account_provider())
+            ),
         )
 
     async def async_step_text_generation(
         self, user_input: dict[str, Any] | None = None
     ):
         """Configure a text generation service."""
+        defaults = self._text_generation_defaults()
+        existing_service_data = {
+            **defaults,
+            **self._existing_service_data(),
+        }
+        if user_input is not None:
+            user_input = {**defaults, **user_input}
+        fallback_models = (
+            CEREBRAS_TEXT_MODELS
+            if self._account_provider() == PROVIDER_CEREBRAS
+            else TEXT_MODELS
+        )
         model_options, model_registry = await self._model_options(
             GroqFeature.TEXT_GENERATION,
-            TEXT_MODELS,
+            fallback_models,
             user_input,
         )
         if user_input is not None:
@@ -673,7 +826,7 @@ class GroqServiceSubentryFlow(ConfigSubentryFlow):
                 # existing data so reconfigure flows keep hidden secrets and
                 # advanced defaults until the user explicitly changes them.
                 self._pending_service_data = {
-                    **self._existing_service_data(),
+                    **existing_service_data,
                     **user_input,
                 }
                 self._pending_service_data = sanitize_text_generation_service_data(
@@ -689,7 +842,7 @@ class GroqServiceSubentryFlow(ConfigSubentryFlow):
                 )
             if self._is_reconfigure:
                 user_input = {
-                    **self._existing_service_data(),
+                    **existing_service_data,
                     **user_input,
                 }
                 user_input = sanitize_text_generation_service_data(
@@ -716,7 +869,7 @@ class GroqServiceSubentryFlow(ConfigSubentryFlow):
         return self.async_show_form(
             step_id=FEATURE_TEXT_GENERATION,
             data_schema=text_generation_basic_schema(
-                self._existing_service_data(),
+                existing_service_data,
                 model_options,
                 model_registry,
                 llm_api_options=_llm_api_select_options(self.hass),
@@ -724,8 +877,7 @@ class GroqServiceSubentryFlow(ConfigSubentryFlow):
             description_placeholders={
                 "model_capabilities": text_generation_model_capability_summary(
                     (
-                        self._existing_service_data().get(CONF_MODEL)
-                        or model_options[0]
+                        existing_service_data.get(CONF_MODEL) or model_options[0]
                         if model_options
                         else ""
                     ),

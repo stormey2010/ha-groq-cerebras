@@ -8,10 +8,12 @@
                 "title": "Lisää Groq",
                 "description": "Katso lisätietoja dokumentaatiosta.",
                 "data": {
+                    "provider": "Provider",
                     "name": "Nimi",
                     "api_key": "Syötä avain Groq API"
                 },
                 "data_description": {
+                    "provider": "Select Groq or Cerebras for this account.",
                     "name": "Ystävällinen nimi tälle Groq-tilille. Käytä tätä tunnistaaksesi API-avaimen tai laskutusprojektin.",
                     "api_key": "Groq API -avain tälle tilille. Lisää toinen Groq-tili, jos haluat käyttää eri avainta erilliselle palvelujoukolle."
                 }
@@ -131,6 +133,7 @@
                         "schema_name": "Kaavion nimi",
                         "schema": "JSON schema",
                         "strict": "Tiukka kaavatila",
+                        "simple_tools": "Simple tool configuration",
                         "request_body_options": "Pyynnön lisäasetukset"
                     },
                     "data_description": {
@@ -149,6 +152,7 @@
                         "schema_name": "Lyhyt tunniste, joka on lähetetty numeroon Groq skeeman kanssa.",
                         "schema": "JSON Schema-objekti lähetetään muodossa response_format.json_schema.schema.",
                         "strict": "Käyttää Groq-rajoitettua dekoodausta, kun valittu malli tukee tiukkoja strukturoituja lähtöjä.",
+                        "simple_tools": "Optional tool groups and credentials. Weather, Home Assistant, and live flights need no extra credentials. See the README for the configuration keys.",
                         "request_body_options": "JSON-objekti yhdistetty keskustelun viimeistelypyynnön runkoon. Tämä on edistynyt läpivienti jokaiselle Groq-keskustelujen luomisvaihtoehdolle, jota ei näytetä erillisenä kenttänä, mukaan lukien citation_options, compound_custom, disable_tool_validation, documents, exclude_domains, frequency_penalty, function_call, functions, include_domains, logit_bias, logprobs, max_tokens, metadata, n, parallel_tool_calls, presence_penalty, response_format, search_settings, store, stream_options, tool_choice, tools, top_logprobs, and user."
                     }
                 }

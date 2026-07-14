@@ -6,6 +6,7 @@ from typing import Any
 
 DOMAIN = "groq"
 CONF_API_KEY = "api_key"
+CONF_PROVIDER = "provider"
 CONF_MODEL = "model"
 CONF_INPUT = "input"
 CONF_VOICE = "voice"
@@ -35,6 +36,7 @@ CONF_PROMPT_CACHING = "prompt_caching"
 CONF_STREAM = "stream"
 CONF_COMPOUND_BUILTIN_TOOLS = "compound_builtin_tools"
 CONF_REQUEST_BODY_OPTIONS = "request_body_options"
+CONF_SIMPLE_TOOLS = "simple_tools"
 CONF_SCHEMA = "schema"
 CONF_SCHEMA_NAME = "schema_name"
 CONF_STRICT = "strict"
@@ -134,6 +136,21 @@ DEFAULT_TTS_SPEED = 1.0
 DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
 DEFAULT_TTS_URL = f"{DEFAULT_BASE_URL}/audio/speech"
 
+PROVIDER_GROQ = "groq"
+PROVIDER_CEREBRAS = "cerebras"
+DEFAULT_PROVIDER = PROVIDER_GROQ
+PROVIDER_OPTIONS = [
+    {"value": PROVIDER_GROQ, "label": "Groq"},
+    {"value": PROVIDER_CEREBRAS, "label": "Cerebras"},
+]
+CEREBRAS_BASE_URL = "https://api.cerebras.ai/v1"
+CEREBRAS_TEXT_MODELS = ["gpt-oss-120b"]
+CEREBRAS_DEFAULT_TEXT_MODEL = CEREBRAS_TEXT_MODELS[0]
+CEREBRAS_DEFAULT_MAX_TOKENS = 32768
+CEREBRAS_DEFAULT_TEMPERATURE = 1.0
+CEREBRAS_DEFAULT_TOP_P = 1.0
+CEREBRAS_DEFAULT_REASONING_EFFORT = "low"
+
 TEXT_MODELS = [
     "openai/gpt-oss-20b",
     "openai/gpt-oss-120b",
@@ -149,6 +166,7 @@ DEFAULT_TEXT_MODEL = "openai/gpt-oss-20b"
 DEFAULT_TEXT_TEMPERATURE = 0.2
 
 REASONING_MODELS = {
+    "gpt-oss-120b",
     "openai/gpt-oss-20b",
     "openai/gpt-oss-120b",
     "openai/gpt-oss-safeguard-20b",
@@ -160,11 +178,42 @@ PROMPT_CACHING_MODELS = {
     "openai/gpt-oss-safeguard-20b",
 }
 STRUCTURED_OUTPUTS_MODELS = {
+    "gpt-oss-120b",
     "openai/gpt-oss-20b",
     "openai/gpt-oss-120b",
     "openai/gpt-oss-safeguard-20b",
     "meta-llama/llama-4-scout-17b-16e-instruct",
 }
+
+
+def normalize_provider(provider: Any) -> str:
+    """Return a supported account provider, preserving Groq for old entries."""
+    if provider == PROVIDER_CEREBRAS:
+        return PROVIDER_CEREBRAS
+    return PROVIDER_GROQ
+
+
+def provider_base_url(provider: Any) -> str:
+    """Return the OpenAI-compatible base URL for an account provider."""
+    if normalize_provider(provider) == PROVIDER_CEREBRAS:
+        return CEREBRAS_BASE_URL
+    return DEFAULT_BASE_URL
+
+
+def provider_name(provider: Any) -> str:
+    """Return the user-facing account provider name."""
+    if normalize_provider(provider) == PROVIDER_CEREBRAS:
+        return "Cerebras"
+    return "Groq"
+
+
+def provider_setup_features(provider: Any) -> tuple[str, ...]:
+    """Return service types supported by an account provider."""
+    if normalize_provider(provider) == PROVIDER_CEREBRAS:
+        return (FEATURE_TEXT_GENERATION,)
+    return SETUP_FEATURES
+
+
 COMPOUND_MODELS = {
     "groq/compound",
     "groq/compound-mini",
