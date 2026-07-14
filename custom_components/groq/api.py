@@ -11,7 +11,7 @@ import logging
 from asyncio import CancelledError
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Callable
-from urllib.parse import quote, urljoin
+from urllib.parse import quote, urljoin, urlparse
 
 import aiohttp
 from homeassistant.core import HomeAssistant
@@ -431,6 +431,21 @@ class GroqApiClient:
         return self._base_url
 
     @property
+    def is_cerebras(self) -> bool:
+        """Return whether this client targets Cerebras Inference."""
+        return urlparse(self._base_url).hostname == "api.cerebras.ai"
+
+    def _prepare_chat_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Apply provider-specific OpenAI compatibility details."""
+        if not self.is_cerebras:
+            return payload
+        prepared = dict(payload)
+        max_completion_tokens = prepared.pop("max_completion_tokens", None)
+        if max_completion_tokens is not None:
+            prepared.setdefault("max_tokens", max_completion_tokens)
+        return prepared
+
+    @property
     def available(self) -> bool:
         """Return whether the last Groq API interaction succeeded."""
         return self._available
@@ -516,7 +531,9 @@ class GroqApiClient:
         payload = await self._request_json(
             "POST",
             CHAT_COMPLETIONS_PATH,
-            json_payload=build_text_generation_payload(request),
+            json_payload=self._prepare_chat_payload(
+                build_text_generation_payload(request)
+            ),
             api_key=request.api_key,
             guard_key=self._guard_key(request),
         )
@@ -527,7 +544,7 @@ class GroqApiClient:
         request: TextGenerationRequest,
     ) -> AsyncIterator[str]:
         """Stream generated text chunks from the chat completions API."""
-        payload = build_text_generation_payload(request)
+        payload = self._prepare_chat_payload(build_text_generation_payload(request))
         payload["stream"] = True
         async for event in self._request_stream(
             "POST",
@@ -559,7 +576,9 @@ class GroqApiClient:
         payload = await self._request_json(
             "POST",
             CHAT_COMPLETIONS_PATH,
-            json_payload=build_structured_generation_payload(request),
+            json_payload=self._prepare_chat_payload(
+                build_structured_generation_payload(request)
+            ),
             api_key=request.api_key,
             guard_key=self._guard_key(request),
         )
@@ -586,7 +605,7 @@ class GroqApiClient:
         payload = await self._request_json(
             "POST",
             CHAT_COMPLETIONS_PATH,
-            json_payload=build_vision_payload(request),
+            json_payload=self._prepare_chat_payload(build_vision_payload(request)),
             api_key=request.api_key,
             guard_key=self._guard_key(request),
         )

@@ -1,6 +1,6 @@
 {
   "domain": "groq",
-  "name": "Groq",
+  "name": "Groq and Cerebras",
   "after_dependencies": [
     "assist_pipeline",
     "camera",
@@ -23,5 +23,5 @@
   "requirements": [
     "jsonschema==4.26.0"
   ],
-  "version": "1.3.2"
+  "version": "1.4.0"
 }

@@ -31,7 +31,7 @@ from .conversation import (
     _chat_log_tools,
     _result_tool_calls,
 )
-from .const import CONF_SUBENTRY_ID, DOMAIN
+from .const import CONF_PROVIDER, CONF_SUBENTRY_ID, DOMAIN, provider_name
 from .errors import GroqApiError
 from .feature_registry import GroqFeature
 from .model_registry import GroqCapability, GroqModelRegistry
@@ -222,7 +222,7 @@ class GroqAITaskEntity(AITaskEntity):
         unique_id = service_unique_id(self._config_entry, self._service_data)
         return {
             "identifiers": {(DOMAIN, unique_id)},
-            "manufacturer": "Groq",
+            "manufacturer": provider_name(self._config_entry.data.get(CONF_PROVIDER)),
             "model": service_model(self._config_entry, self._service_data),
             "name": self._service_name,
         }

@@ -8,10 +8,12 @@
                 "title": "Groq hinzufügen",
                 "description": "Weitere Informationen finden Sie in der Dokumentation.",
                 "data": {
+                    "provider": "Provider",
                     "name": "Name",
                     "api_key": "Geben Sie den Schlüssel Groq API ein"
                 },
                 "data_description": {
+                    "provider": "Select Groq or Cerebras for this account.",
                     "name": "Ein benutzerfreundlicher Name für dieses Groq-Konto. Verwenden Sie dies, um den API-Schlüssel oder das Abrechnungsprojekt zu identifizieren.",
                     "api_key": "Groq API Schlüssel für dieses Konto. Fügen Sie ein weiteres Groq-Konto hinzu, wenn Sie einen anderen Schlüssel für einen separaten Satz von Diensten verwenden möchten."
                 }
@@ -131,6 +133,7 @@
                         "schema_name": "Schemaname",
                         "schema": "JSON schema",
                         "strict": "Strikter Schemamodus",
+                        "simple_tools": "Simple tool configuration",
                         "request_body_options": "Zusätzliche Optionen für den Anforderungstext"
                     },
                     "data_description": {
@@ -149,6 +152,7 @@
                         "schema_name": "Eine kurze Kennung, die mit dem Schema an Groq gesendet wird.",
                         "schema": "JSON Schema-Objekt gesendet als response_format.json_schema.schema.",
                         "strict": "Verwendet die eingeschränkte Groq-Dekodierung, wenn das ausgewählte Modell streng strukturierte Ausgaben unterstützt.",
+                        "simple_tools": "Optional tool groups and credentials. Weather, Home Assistant, and live flights need no extra credentials. See the README for the configuration keys.",
                         "request_body_options": "JSON-Objekt in den Text der Chat-Abschlussanforderung eingefügt. Dies ist die erweiterte Passthrough-Funktion für jede Groq-Chat-Create-Body-Option, die nicht als eigenes Feld angezeigt wird, einschließlich citation_options, compound_custom, disable_tool_validation, documents, exclude_domains, frequency_penalty, function_call, functions, include_domains, logit_bias, logprobs, max_tokens, metadata, n, parallel_tool_calls, presence_penalty, response_format, search_settings, store, stream_options, tool_choice, tools, top_logprobs, and user."
                     }
                 }

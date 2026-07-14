@@ -8,10 +8,12 @@
                 "title": "Groq hozzáadása",
                 "description": "További információért lásd a dokumentációt.",
                 "data": {
+                    "provider": "Provider",
                     "name": "Név",
                     "api_key": "Írja be a Groq API kulcsot"
                 },
                 "data_description": {
+                    "provider": "Select Groq or Cerebras for this account.",
                     "name": "Barátságos név ennek a Groq fióknak. Ezzel azonosíthatja a API kulcsot vagy számlázási projektet.",
                     "api_key": "Groq API kulcs ehhez a fiókhoz. Adjon hozzá egy másik Groq-fiókot, ha másik kulcsot szeretne használni egy külön szolgáltatáskészlethez."
                 }
@@ -131,6 +133,7 @@
                         "schema_name": "Sémanév",
                         "schema": "JSON schema",
                         "strict": "Szigorú sémamód",
+                        "simple_tools": "Simple tool configuration",
                         "request_body_options": "További kéréstörzs opciók"
                     },
                     "data_description": {
@@ -149,6 +152,7 @@
                         "schema_name": "A sémával együtt a Groq számára elküldött rövid azonosító.",
                         "schema": "JSON Schema objektum elküldve response_format.json_schema.sémaként.",
                         "strict": "Groq korlátozott dekódolást használ, ha a kiválasztott modell támogatja a szigorú strukturált kimeneteket.",
+                        "simple_tools": "Optional tool groups and credentials. Weather, Home Assistant, and live flights need no extra credentials. See the README for the configuration keys.",
                         "request_body_options": "A JSON objektum beolvasztva a csevegés befejezését kérő törzsbe. Ez minden olyan Groq csevegés-létrehozási opció speciális átjárása, amely nem jelenik meg dedikált mezőként, ideértve a citation_options, compound_custom, disable_tool_validation, documents, exclude_domains, frequency_penalty, function_call, functions, include_domains, logit_bias, logprobs, max_tokens, metadata, n, parallel_tool_calls, presence_penalty, response_format, search_settings, store, stream_options, tool_choice, tools, top_logprobs, and user."
                     }
                 }

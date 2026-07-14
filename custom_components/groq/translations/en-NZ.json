@@ -8,10 +8,12 @@
                 "title": "Add Groq",
                 "description": "See documentation for further info.",
                 "data": {
+                    "provider": "Provider",
                     "name": "Name",
                     "api_key": "Enter Groq API key"
                 },
                 "data_description": {
+                    "provider": "Select Groq or Cerebras for this account.",
                     "name": "A friendly name for this Groq account. Use this to identify the API key or billing project.",
                     "api_key": "Groq API key for this account. Add another Groq account if you want to use a different key for a separate set of services."
                 }
@@ -131,6 +133,7 @@
                         "schema_name": "Schema name",
                         "schema": "JSON schema",
                         "strict": "Strict schema mode",
+                        "simple_tools": "Simple tool configuration",
                         "request_body_options": "Additional request body options"
                     },
                     "data_description": {
@@ -149,6 +152,7 @@
                         "schema_name": "A short identifier sent to Groq with the schema.",
                         "schema": "JSON Schema object sent as response_format.json_schema.schema.",
                         "strict": "Uses Groq constrained decoding when the selected model supports strict structured outputs.",
+                        "simple_tools": "Optional tool groups and credentials. Weather, Home Assistant, and live flights need no extra credentials. See the README for the configuration keys.",
                         "request_body_options": "JSON object merged into the chat completion request body. This is the advanced passthrough for every Groq chat-create body option not shown as a dedicated field, including citation_options, compound_custom, disable_tool_validation, documents, exclude_domains, frequency_penalty, function_call, functions, include_domains, logit_bias, logprobs, max_tokens, metadata, n, parallel_tool_calls, presence_penalty, response_format, search_settings, store, stream_options, tool_choice, tools, top_logprobs, and user."
                     }
                 }

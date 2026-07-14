@@ -8,10 +8,12 @@
                 "title": "Přidat Groq",
                 "description": "Další informace naleznete v dokumentaci.",
                 "data": {
+                    "provider": "Provider",
                     "name": "Jméno",
                     "api_key": "Zadejte klíč Groq API"
                 },
                 "data_description": {
+                    "provider": "Select Groq or Cerebras for this account.",
                     "name": "Popisný název pro tento účet Groq. Použijte toto k identifikaci klíče API nebo fakturačního projektu.",
                     "api_key": "Klíč Groq API pro tento účet. Pokud chcete použít jiný klíč pro samostatnou sadu služeb, přidejte další účet Groq."
                 }
@@ -131,6 +133,7 @@
                         "schema_name": "Název schématu",
                         "schema": "JSON schema",
                         "strict": "Režim přísného schématu",
+                        "simple_tools": "Simple tool configuration",
                         "request_body_options": "Další možnosti těla požadavku"
                     },
                     "data_description": {
@@ -149,6 +152,7 @@
                         "schema_name": "Krátký identifikátor odeslaný do Groq se schématem.",
                         "schema": "Objekt JSON Schema odeslán jako response_format.json_schema.schema.",
                         "strict": "Používá omezené dekódování Groq, když vybraný model podporuje přísně strukturované výstupy.",
+                        "simple_tools": "Optional tool groups and credentials. Weather, Home Assistant, and live flights need no extra credentials. See the README for the configuration keys.",
                         "request_body_options": "Objekt JSON sloučen do těla žádosti o dokončení chatu. Toto je pokročilý průchod pro každou možnost vytvoření těla chatu Groq, která není zobrazena jako vyhrazené pole, včetně citation_options, compound_custom, disable_tool_validation, documents, exclude_domains, frequency_penalty, function_call, functions, include_domains, logit_bias, logprobs, max_tokens, metadata, n, parallel_tool_calls, presence_penalty, response_format, search_settings, store, stream_options, tool_choice, tools, top_logprobs, and user."
                     }
                 }

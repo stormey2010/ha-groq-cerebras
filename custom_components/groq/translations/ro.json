@@ -8,10 +8,12 @@
                 "title": "Adăugați Groq",
                 "description": "Consultați documentația pentru mai multe informații.",
                 "data": {
+                    "provider": "Provider",
                     "name": "Nume",
                     "api_key": "Introduceți tasta Groq API"
                 },
                 "data_description": {
+                    "provider": "Select Groq or Cerebras for this account.",
                     "name": "Un nume prietenos pentru acest cont Groq. Utilizați aceasta pentru a identifica cheia API sau proiectul de facturare.",
                     "api_key": "Groq API cheie pentru acest cont. Adăugați un alt cont Groq dacă doriți să utilizați o cheie diferită pentru un set separat de servicii."
                 }
@@ -131,6 +133,7 @@
                         "schema_name": "Numele schemei",
                         "schema": "JSON schema",
                         "strict": "Mod schema strict",
+                        "simple_tools": "Simple tool configuration",
                         "request_body_options": "Opțiuni suplimentare pentru corpul solicitării"
                     },
                     "data_description": {
@@ -149,6 +152,7 @@
                         "schema_name": "Un identificator scurt trimis către Groq cu schema.",
                         "schema": "JSON Schema obiect trimis ca response_format.json_schema.schema.",
                         "strict": "Utilizează decodarea constrânsă Groq atunci când modelul selectat acceptă ieșiri structurate stricte.",
+                        "simple_tools": "Optional tool groups and credentials. Weather, Home Assistant, and live flights need no extra credentials. See the README for the configuration keys.",
                         "request_body_options": "Obiect JSON fuzionat în corpul solicitării de finalizare a chatului. Aceasta este trecerea avansată pentru fiecare opțiune de creare a corpului de chat Groq care nu este afișată ca un câmp dedicat, inclusiv citation_options, compound_custom, disable_tool_validation, documents, exclude_domains, frequency_penalty, function_call, functions, include_domains, logit_bias, logprobs, max_tokens, metadata, n, parallel_tool_calls, presence_penalty, response_format, search_settings, store, stream_options, tool_choice, tools, top_logprobs, and user."
                     }
                 }

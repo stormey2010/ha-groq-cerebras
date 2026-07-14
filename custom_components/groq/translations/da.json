@@ -8,10 +8,12 @@
                 "title": "Tilføj Groq",
                 "description": "Se dokumentationen for yderligere information.",
                 "data": {
+                    "provider": "Provider",
                     "name": "Navn",
                     "api_key": "Indtast Groq API nøgle"
                 },
                 "data_description": {
+                    "provider": "Select Groq or Cerebras for this account.",
                     "name": "Et venligt navn til denne Groq-konto. Brug dette til at identificere API-nøglen eller faktureringsprojektet.",
                     "api_key": "Groq API nøgle for denne konto. Tilføj en anden Groq-konto, hvis du vil bruge en anden nøgle til et separat sæt tjenester."
                 }
@@ -131,6 +133,7 @@
                         "schema_name": "Skemanavn",
                         "schema": "JSON schema",
                         "strict": "Streng skematilstand",
+                        "simple_tools": "Simple tool configuration",
                         "request_body_options": "Yderligere muligheder for anmodningstekst"
                     },
                     "data_description": {
@@ -149,6 +152,7 @@
                         "schema_name": "En kort identifikator sendt til Groq med skemaet.",
                         "schema": "JSON Schema objekt sendt som response_format.json_schema.schema.",
                         "strict": "Bruger Groq begrænset afkodning, når den valgte model understøtter strengt strukturerede output.",
+                        "simple_tools": "Optional tool groups and credentials. Weather, Home Assistant, and live flights need no extra credentials. See the README for the configuration keys.",
                         "request_body_options": "JSON-objekt flettet ind i anmodningen om chat-afslutning. Dette er den avancerede passthrough for hver Groq chat-opret brødtekst-indstilling, der ikke vises som et dedikeret felt, inklusive citation_options, compound_custom, disable_tool_validation, documents, exclude_domains, frequency_penalty, function_call, functions, include_domains, logit_bias, logprobs, max_tokens, metadata, n, parallel_tool_calls, presence_penalty, response_format, search_settings, store, stream_options, tool_choice, tools, top_logprobs, and user."
                     }
                 }

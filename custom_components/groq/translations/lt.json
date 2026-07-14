@@ -8,10 +8,12 @@
                 "title": "Pridėkite Groq",
                 "description": "Daugiau informacijos rasite dokumentacijoje.",
                 "data": {
+                    "provider": "Provider",
                     "name": "Vardas",
                     "api_key": "Įveskite Groq API klavišą"
                 },
                 "data_description": {
+                    "provider": "Select Groq or Cerebras for this account.",
                     "name": "Patogus šios Groq paskyros pavadinimas. Naudokite tai norėdami identifikuoti API raktą arba atsiskaitymo projektą.",
                     "api_key": "šios paskyros Groq API raktas. Pridėkite kitą Groq paskyrą, jei norite naudoti kitą raktą atskiram paslaugų rinkiniui."
                 }
@@ -131,6 +133,7 @@
                         "schema_name": "Schemos pavadinimas",
                         "schema": "JSON schema",
                         "strict": "Griežtas schemos režimas",
+                        "simple_tools": "Simple tool configuration",
                         "request_body_options": "Papildomos užklausos turinio parinktys"
                     },
                     "data_description": {
@@ -149,6 +152,7 @@
                         "schema_name": "Trumpas identifikatorius, išsiųstas į Groq su schema.",
                         "schema": "JSON Schema objektas išsiųstas kaip response_format.json_schema.schema.",
                         "strict": "Naudoja apribotą Groq dekodavimą, kai pasirinktas modelis palaiko griežtus struktūrinius išėjimus.",
+                        "simple_tools": "Optional tool groups and credentials. Weather, Home Assistant, and live flights need no extra credentials. See the README for the configuration keys.",
                         "request_body_options": "JSON objektas sujungtas į pokalbio užbaigimo užklausos turinį. Tai yra išplėstinis kiekvienos Groq pokalbių kūrimo parinkties perėjimas, kuris nerodomas kaip specialus laukas, įskaitant citation_options, compound_custom, disable_tool_validation, documents, exclude_domains, frequency_penalty, function_call, functions, include_domains, logit_bias, logprobs, max_tokens, metadata, n, parallel_tool_calls, presence_penalty, response_format, search_settings, store, stream_options, tool_choice, tools, top_logprobs, and user."
                     }
                 }

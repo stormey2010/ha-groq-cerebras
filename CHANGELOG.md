@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.4.0 - 2026-07-14
+
+### New features
+- Added Cerebras as an account provider for Text Generation, Assist conversations, and AI Tasks through its OpenAI-compatible API.
+- Added provider-specific defaults for Cerebras `gpt-oss-120b`: streaming enabled, 32,768 max tokens, temperature 1, top P 1, and low reasoning effort.
+- Added optional simple Assist tools for weather, Exa search, Home Assistant, OpenSky flights, Apple Calendar, Google Workspace, Spotify, and OpenRouteService, with credential-gated exposure and diagnostics redaction.
+
+### Improvements
+- Kept Groq speech and image services isolated from Cerebras accounts while preserving existing Groq account behavior.
+- Added provider-aware API-key validation, model discovery, request routing, translations, documentation, and regression coverage.
+- Bumped the integration manifest version to `1.4.0`.
+
 ## v1.3.2 - 2026-07-06
 
 ### 🚧 Breaking changes

@@ -12,6 +12,7 @@ from homeassistant.helpers.selector import selector
 from .const import (
     CONF_ADVANCED_OPTIONS,
     CONF_API_KEY,
+    CONF_PROVIDER,
     COMPOUND_BUILTIN_TOOL_OPTIONS,
     CONF_COMPOUND_BUILTIN_TOOLS,
     CONF_ENABLE_LONG_TTS,
@@ -32,6 +33,7 @@ from .const import (
     CONF_SCHEMA,
     CONF_SCHEMA_NAME,
     CONF_SEED,
+    CONF_SIMPLE_TOOLS,
     CONF_SERVICE_TYPE,
     CONF_SERVICE_TIER,
     CONF_SPEED,
@@ -45,6 +47,7 @@ from .const import (
     CONF_VOCAL_DIRECTIONS,
     CONF_VOICE,
     DEFAULT_MODEL,
+    DEFAULT_PROVIDER,
     DEFAULT_PROTECT_FREE_TIER,
     DEFAULT_RESPONSE_FORMAT,
     DEFAULT_STT_LANGUAGE,
@@ -57,6 +60,8 @@ from .const import (
     DEFAULT_VOICE,
     FEATURE_LABELS,
     MODELS,
+    normalize_provider,
+    PROVIDER_OPTIONS,
     REASONING_EFFORT_OPTIONS,
     REASONING_FORMAT_OPTIONS,
     RESPONSE_FORMATS,
@@ -345,17 +350,22 @@ def api_key_selector():
     return selector({"text": {"type": "password"}})
 
 
-def setup_schema() -> vol.Schema:
+def setup_schema(values: dict[str, Any] | None = None) -> vol.Schema:
     """Return the account-level setup schema."""
+    current = values or {}
     return vol.Schema(
         {
-            vol.Required(CONF_NAME, default="Groq"): str,
+            vol.Required(
+                CONF_PROVIDER,
+                default=current.get(CONF_PROVIDER, DEFAULT_PROVIDER),
+            ): selector({"select": {"options": PROVIDER_OPTIONS, "mode": "dropdown"}}),
+            vol.Required(CONF_NAME, default=current.get(CONF_NAME, "Groq")): str,
             vol.Required(CONF_API_KEY): api_key_selector(),
         }
     )
 
 
-def service_type_schema() -> vol.Schema:
+def service_type_schema(features: tuple[str, ...] = SETUP_FEATURES) -> vol.Schema:
     """Return the Groq service type selector schema."""
     return vol.Schema(
         {
@@ -364,7 +374,7 @@ def service_type_schema() -> vol.Schema:
                     "select": {
                         "options": [
                             {"value": feature, "label": FEATURE_LABELS[feature]}
-                            for feature in SETUP_FEATURES
+                            for feature in features
                         ],
                         "mode": "list",
                     }
@@ -700,6 +710,12 @@ def text_generation_advanced_schema(
         )
     schema[
         vol.Optional(
+            CONF_SIMPLE_TOOLS,
+            default=values.get(CONF_SIMPLE_TOOLS, {}),
+        )
+    ] = selector({"object": {}})
+    schema[
+        vol.Optional(
             CONF_REQUEST_BODY_OPTIONS,
             default=values.get(CONF_REQUEST_BODY_OPTIONS, {}),
         )
@@ -712,6 +728,7 @@ def entry_defaults(user_input: dict[str, Any]) -> dict[str, Any]:
     data = dict(user_input)
     if not data.get(CONF_NAME):
         data[CONF_NAME] = "Groq"
+    data[CONF_PROVIDER] = normalize_provider(data.get(CONF_PROVIDER))
     data.pop(CONF_ENABLED_FEATURES, None)
     return data
 
@@ -779,6 +796,8 @@ def clean_service_input(user_input: dict[str, Any]) -> dict[str, Any]:
         data.pop(CONF_LLM_HASS_API, None)
     if not data.get(CONF_REQUEST_BODY_OPTIONS):
         data.pop(CONF_REQUEST_BODY_OPTIONS, None)
+    if not data.get(CONF_SIMPLE_TOOLS):
+        data.pop(CONF_SIMPLE_TOOLS, None)
     if not data.get(CONF_SCHEMA):
         data.pop(CONF_SCHEMA, None)
     if not data.get(CONF_INCLUDE_REASONING):
@@ -823,6 +842,12 @@ def validate_text_generation_input(
         GroqCapability.TOOL_CALLING,
     ):
         errors[CONF_LLM_HASS_API] = "unsupported_tool_calling_model"
+    if user_input.get(CONF_SIMPLE_TOOLS) and not _supports_model_option(
+        model_registry,
+        model,
+        GroqCapability.TOOL_CALLING,
+    ):
+        errors[CONF_SIMPLE_TOOLS] = "unsupported_tool_calling_model"
     compound_builtin_tools = user_input.get(CONF_COMPOUND_BUILTIN_TOOLS)
     if compound_builtin_tools:
         if not _supports_model_option(model_registry, model, GroqCapability.COMPOUND):

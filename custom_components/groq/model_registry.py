@@ -152,6 +152,19 @@ VISION_MODEL_MARKERS = frozenset(
 VISION_MODEL_PREFIXES = ("qwen/qwen3.6-",)
 
 BUILT_IN_MODELS: dict[str, GroqModel] = {
+    "gpt-oss-120b": GroqModel(
+        model_id="gpt-oss-120b",
+        context_window=131072,
+        max_completion_tokens=65536,
+        capabilities=frozenset(
+            {
+                GroqCapability.TEXT_GENERATION,
+                GroqCapability.REASONING,
+                GroqCapability.STRUCTURED_OUTPUTS,
+                GroqCapability.TOOL_CALLING,
+            }
+        ),
+    ),
     "llama-3.1-8b-instant": GroqModel(
         model_id="llama-3.1-8b-instant",
         context_window=131072,
